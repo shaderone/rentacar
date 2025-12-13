@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./config/db'); // Import the db connector
+const authRoutes = require('./routes/authRoutes');
 
 // 1. Initialize App
 const app = express();
@@ -17,6 +18,9 @@ app.use(cors({
     origin: process.env.FRONTEND_URL, // Only allow our React app to talk to us
     credentials: true
 }));
+
+// 4. Routes
+app.use('/api/auth', authRoutes);
 
 // 4. A Simple Test Route (To check if it works)
 app.get('/', (req, res) => {
