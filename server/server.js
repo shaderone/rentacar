@@ -1,4 +1,5 @@
-require('dotenv').config(); // Load the secrets first
+const path = require('path'); // to help load the .env file when not in root directory or running from a different cwd
+require('dotenv').config({ path: path.resolve(__dirname, './.env') }); // Load the secrets first
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
