@@ -25,7 +25,14 @@ const UserSchema = new mongoose.Schema({
         type: String,
         enum: ['user', 'host', 'admin'], // Strict limit on roles
         default: 'user'
-    }
+    },
+    // 3. Host Specifics (The "Business" Part)
+    // This object only gets filled if role === 'host'
+    hostProfile: {
+        businessName: { type: String },
+        licenseNumber: { type: String },
+        verified: { type: Boolean, default: false } // Admin has to approve them later
+    },
 }, {
     timestamps: true // Automatically adds createdAt and updatedAt
 });
@@ -33,7 +40,7 @@ const UserSchema = new mongoose.Schema({
 // 🔒 BEST PRACTICE [Encryption Middleware]: Encrypt password using bcrypt before saving (Runs Automatically) 
 UserSchema.pre('save', async function (next) {
     if (!this.isModified('password')) {
-        next();
+        next(); // if password is not modified, move to next middleware
     }
     const salt = await bcrypt.genSalt();
     this.password = await bcrypt.hash(this.password, salt);

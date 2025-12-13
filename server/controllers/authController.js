@@ -12,8 +12,7 @@ const generateToken = (id) => {
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = async (req, res) => {
-    const { name, email, password, role } = req.body;
-
+    const { name, email, password, role, businessName, licenseNumber } = req.body;
     try {
         const userExists = await User.findOne({ email });
 
@@ -26,7 +25,12 @@ const registerUser = async (req, res) => {
             name,
             email,
             password,
-            role
+            role,
+            // only add hostprofile if the role is == 'host'
+            hostProfile: role === 'host' ? {
+                businessName,
+                licenseNumber
+            } : undefined
         });
 
         // here we check if user is created successfully because mongoose create() method may fail silently sometimes. 
@@ -104,6 +108,7 @@ const loginUser = async (req, res) => {
 // @desc    Logout user
 // @route   POST /api/auth/logout
 const logoutUser = (req, res) => {
+    // on logout we clear the cookie by setting it to an empty string and setting its expiration date to a past date. or new Date(0) which is January 1, 1970, the start of Unix time. kinda like a reset.
     res.cookie('jwt', '', {
         httpOnly: true,
         expires: new Date(0)
