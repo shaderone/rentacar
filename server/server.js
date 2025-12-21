@@ -1,9 +1,11 @@
-const path = require('path'); // to help load the .env file when not in root directory or running from a different cwd
-require('dotenv').config({ path: path.resolve(__dirname, './.env') }); // Load the secrets first
+// * Importing required packages and files
+
+const path = require('path'); //? to help load the .env file when not in root directory or running from a different cwd
+require('dotenv').config({ path: path.resolve(__dirname, './.env') }); // ? Load the secrets first
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const connectDB = require('./config/db'); // Import the db connector
+const connectDB = require('./config/db'); // ? db connector
 const authRoutes = require('./routes/authRoutes');
 
 // 1. Initialize App
@@ -17,7 +19,8 @@ app.use(express.json()); // Allows server to accept JSON data
 app.use(cookieParser());
 app.use(cors({
     origin: process.env.FRONTEND_URL, // Only allow our React app to talk to us
-    credentials: true
+    credentials: true // allow cookies to be sent or in simple terms : allow cross-site Access-Control requests to include cookies.
+    // this is needed if we want to work with sessions and cookies in our api.
 }));
 
 // 4. Routes
