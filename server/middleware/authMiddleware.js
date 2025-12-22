@@ -1,5 +1,11 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const asyncHandler = require('express-async-handler');
+
+// Middleware to protect routes and ensure user is authenticated. before accessing any protected routes.
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const asyncHandler = require('express-async-handler');
 
 // Middleware to protect routes and ensure user is authenticated. before accessing any protected routes.
 const protect = async (req, res, next) => {
@@ -9,6 +15,8 @@ const protect = async (req, res, next) => {
     token = req.cookies.jwt;
 
     if (token) {
+        // Custom try catch because asyncHandler won't work here. the reason is :
+        // jwt.verify() throws generic errors like "jwt malformed" or "jwt expired". which we cannot catch in asyncHandler because its not an async function.
         try {
             // 2. Verify the token signature
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -33,5 +41,6 @@ const protect = async (req, res, next) => {
         res.status(401).json({ message: 'Not authorized, no token' });
     }
 };
+
 
 module.exports = { protect };   
