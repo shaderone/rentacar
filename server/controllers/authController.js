@@ -29,7 +29,8 @@ const registerUser = async (req, res) => {
             // only add hostprofile if the role is == 'host'
             hostProfile: role === 'host' ? {
                 businessName,
-                licenseNumber
+                licenseNumber,
+                verified: false
             } : undefined
         });
 
@@ -60,7 +61,8 @@ const registerUser = async (req, res) => {
                 _id: user._id,
                 name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                hostProfile: user.hostProfile || null
             });
         } else {
             res.status(400).json({ message: 'Invalid user data' });
@@ -116,8 +118,22 @@ const logoutUser = (req, res) => {
     res.status(200).json({ message: 'Logged out successfully' });
 };
 
+// get all users - for testing protected route
+const getAllUsers = async (req, res) => {
+    // req.user was set by the middleware!
+    try {
+        const users = await User.find({});
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+}
+
 module.exports = {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    getAllUsers
 };
+
+

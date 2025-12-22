@@ -10,6 +10,7 @@ const authRoutes = require('./routes/authRoutes');
 
 // 1. Initialize App
 const app = express();
+app.set('json spaces', 2); // to make the json responses pretty printed with 2 spaces
 
 // 2. Connect to Database
 connectDB();

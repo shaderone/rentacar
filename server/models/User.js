@@ -31,7 +31,7 @@ const UserSchema = new mongoose.Schema({
     hostProfile: {
         businessName: { type: String },
         licenseNumber: { type: String },
-        verified: { type: Boolean, default: false } // Admin has to approve them later
+        verified: { type: Boolean } // Admin has to approve them later
     },
 }, {
     timestamps: true // Automatically adds createdAt and updatedAt
