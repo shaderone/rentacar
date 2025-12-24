@@ -1,5 +1,6 @@
 const Car = require('../models/Car');
 const asyncHandler = require('express-async-handler');
+const { cloudinary } = require('../config/cloudinary');
 
 // @desc Create a new car (host only)
 // @route POST /api/cars
@@ -24,24 +25,28 @@ const createCar = asyncHandler(async (req, res) => {
     }
 
     // 3. Create the Car Object
-    const car = await Car.create({
-        owner: req.user._id, // from the token - cookie (middleware)
-        ...req.body,
-        images: imageFiles,
-        adminApproved: false // default to false, admin needs to approve later.
+    try {
+        const car = await Car.create({
+            owner: req.user._id, // from the token - cookie (middleware)
+            ...req.body,
+            images: imageFiles,
+            adminApproved: false // default to false, admin needs to approve later.
+        });
 
-    });
-
-    // 4. Respond with the created car
-    if (car) {
         res.status(201).json({
-            // message: 'Car created successfully, pending admin approval.',
+            message: 'Car created successfully, pending admin approval.',
             car
         });
-    } else {
-        res.status(400);
-        throw new Error('Invalid car data');
+
+    } catch (err) {
+        // If there's an error during car creation, delete uploaded images from Cloudinary to avoid orphaned files
+        for (const file of req.files) {
+            await cloudinary.uploader.destroy(file.filename);
+        }
+        res.status(500);
+        throw err; // re-throw the error after cleanup
     }
+
 });
 
 // @desc    Get single car by ID
