@@ -2,6 +2,7 @@
 
 const path = require('path'); //? to help load the .env file when not in root directory or running from a different cwd
 require('dotenv').config({ path: path.resolve(__dirname, './.env') }); // ? Load the secrets first
+const { errorHandler } = require('./middleware/errorMiddleware');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -33,6 +34,8 @@ app.use('/api/cars', carRoutes);
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
+
+app.use(errorHandler); // custom error handling middleware
 
 // 5. Start the Server
 const PORT = process.env.PORT || 5000;
