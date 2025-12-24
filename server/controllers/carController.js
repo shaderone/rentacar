@@ -5,36 +5,34 @@ const asyncHandler = require('express-async-handler');
 // @route POST /api/cars
 // @access Private (host only)
 const createCar = asyncHandler(async (req, res) => {
-    // 1. Get data from the request body
-    // TODO : 'owner', 'adminApproved' is excluded because its set manually later (default false)
-    const {
-        make, model, year, plateNumber, pricePerDay,
-        fuelType, transmission, seats, mileage,
-        images, description
-    } = req.body;
 
-    // 2. Validation: Ensure user is a Host (do this in middleware later) | Its a security measure
+    // 1: Validation: Ensure user is a Host (do this in middleware later) | Its a security measure
     if (req.user.role !== 'host') {
         res.status(403);
         throw new Error('Only hosts can create car listings');
     }
 
+    // 2: Handle Image Uploads
+    let imageFiles = [];
+    if (req.files && req.files.length > 0) {
+        imageFiles = req.files.map(file => file.path);
+    }
+
+    if (!req.files || req.files.length === 0) {
+        res.status(400);
+        throw new Error('At least one image is required');
+    }
+
     // 3. Create the Car Object
     const car = await Car.create({
         owner: req.user._id, // from the token - cookie (middleware)
-        make,
-        model,
-        year,
-        plateNumber,
-        pricePerDay,
-        fuelType,
-        transmission,
-        seats,
-        mileage,
-        images,
-        description,
+        ...req.body,
+        images: imageFiles,
+        adminApproved: false // default to false, admin needs to approve later.
+
     });
 
+    // 4. Respond with the created car
     if (car) {
         res.status(201).json({
             // message: 'Car created successfully, pending admin approval.',

@@ -1,7 +1,3 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const asyncHandler = require('express-async-handler');
-
 // Middleware to protect routes and ensure user is authenticated. before accessing any protected routes.
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
