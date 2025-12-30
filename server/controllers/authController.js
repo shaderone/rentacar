@@ -62,7 +62,8 @@ const registerUser = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                hostProfile: user.hostProfile || null
+                hostProfile: user.hostProfile || null,
+                token: generateToken(user._id)
             });
         } else {
             res.status(400).json({ message: 'Invalid user data' });
