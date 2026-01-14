@@ -62,7 +62,7 @@ function Login() {
                     <h1 className='text-3xl font-bold text-slate-800 flex justify-center items-center gap-2'>
                         <FaSignInAlt /> Login
                     </h1>
-                    <p className='text-gray-500 mt-2'>Login to manage your fleet</p>
+                    <p className='text-gray-500 mt-2'>Login to access your account</p>
                 </section>
 
                 {/* Form Section */}

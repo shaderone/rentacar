@@ -4,7 +4,8 @@
   "description": "RESTful API for the Rentacar platform built with Node.js, Express, and MongoDB.",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon server.js"
   },
   "keywords": [
     "nodejs",

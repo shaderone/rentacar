@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      // if the request URL starts with '/api', it will be forwarded to the target : 'http://localhost:5000'
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true, // it means to change the origin of the host or domain of the request to the target URL. here's an example: if your frontend is running on http://localhost:3000 and you make a request to /api/data, with changeOrigin set to true, the request will appear to come from http://localhost:5000 instead of http://localhost:3000.

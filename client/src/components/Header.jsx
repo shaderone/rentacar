@@ -4,10 +4,13 @@ import { useSelector, useDispatch } from 'react-redux'
 import { logout, reset } from '../features/auth/authSlice'
 
 function Header() {
+    // useNavigate hook working in simple terms : it allows us to programmatically change the URL and navigate to different pages within our React application without needing to use traditional anchor tags or reload the page.
     const navigate = useNavigate()
+    // useDispatch hook in simple terms : it provides a way to send actions to the Redux store, allowing us to update the application's state from within our React components.
     const dispatch = useDispatch()
 
     // 1. Get the user from the Redux Store
+    // useSelector hook in simple terms : it allows us to extract and read 
     const { user } = useSelector((state) => state.auth)
 
     const onLogout = () => {
