@@ -1,1 +1,34 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@theme {
+    --font-sans: "Inter", sans-serif;
+    --color-brand-black: #1a1a1a;
+    --color-brand-dark: #2d2d2d;
+    --color-brand-gray: #e5e5e5;
+    --color-brand-light: #f4f4f4;
+    --color-brand-accent: #059669;
+    --radius-3xl: 1.5rem;
+    --radius-pill: 500px;
+}
+
+/* 1. ENABLE DARK MODE SUPPORT */
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+    body {
+        /* 2. SET GLOBAL BACKGROUND & TEXT COLOR */
+        @apply bg-slate-50 text-slate-900 antialiased transition-colors duration-300;
+        @apply dark:bg-slate-950 dark:text-white;
+    }
+}
+
+@layer components {
+
+    /* The Single Source of Truth for your App's Width 
+     Change "1600px" here, and it updates EVERYWHERE.
+  */
+    .app-container {
+        @apply max-w-400 mx-auto w-full;
+    }
+}

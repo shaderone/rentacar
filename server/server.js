@@ -9,6 +9,7 @@ const cookieParser = require('cookie-parser');
 const connectDB = require('./config/db'); // ? db connector
 const authRoutes = require('./routes/authRoutes');
 const carRoutes = require('./routes/carRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
 
 // 1. Initialize App
 const app = express();
@@ -29,6 +30,7 @@ app.use(cors({
 // 4. Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/cars', carRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 // 4. A Simple Test Route (To check if it works)
 app.get('/', (req, res) => {
