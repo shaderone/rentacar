@@ -7,13 +7,7 @@ const { cloudinary } = require('../config/cloudinary');
 // @access Private (host only)
 const createCar = asyncHandler(async (req, res) => {
 
-    // 1: Validation: Ensure user is a Host (do this in middleware later) | Its a security measure
-    if (req.user.role !== 'host') {
-        res.status(403);
-        throw new Error('Only hosts can create car listings');
-    }
-
-    // 2: Handle Image Uploads
+    // 1: Handle Image Uploads
     let imageFiles = [];
     if (req.files && req.files.length > 0) {
         imageFiles = req.files.map(file => file.path);
@@ -24,10 +18,10 @@ const createCar = asyncHandler(async (req, res) => {
         throw new Error('At least one image is required');
     }
 
-    // 3. Create the Car Object
+    // 2. Create the Car Object
     try {
         const car = await Car.create({
-            owner: req.user._id, // from the token - cookie (middleware)
+            owner: req.user.id, // from the token - cookie (middleware)
             ...req.body,
             images: imageFiles,
             adminApproved: false // default to false, admin needs to approve later.
@@ -40,8 +34,14 @@ const createCar = asyncHandler(async (req, res) => {
 
     } catch (err) {
         // If there's an error during car creation, delete uploaded images from Cloudinary to avoid orphaned files
-        for (const file of req.files) {
-            await cloudinary.uploader.destroy(file.filename);
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                try {
+                    await cloudinary.uploader.destroy(file.filename);
+                } catch (cleanupErr) {
+                    // swallow cleanup errors to ensure original error is returned
+                }
+            }
         }
         res.status(500);
         throw err; // re-throw the error after cleanup
