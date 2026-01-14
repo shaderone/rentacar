@@ -5,13 +5,15 @@
 import { configureStore } from "@reduxjs/toolkit";
 import authReducer from "../features/auth/authSlice";
 import carReducer from "../features/cars/carSlice";
+import bookingReducer from "../features/booking/bookingSlice";
 
 // The configureStore function from Redux Toolkit is used to create the store. It takes an object where we define the different slices of state and their corresponding reducers.   
 
 export const store = configureStore({
     reducer: {
         auth: authReducer,
-        cars: carReducer
+        cars: carReducer,
+        bookings: bookingReducer,
     }
 })
 

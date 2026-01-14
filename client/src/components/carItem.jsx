@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 function CarItem({ car }) {
     return (
         <div className='car bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition duration-300'>
@@ -32,6 +34,9 @@ function CarItem({ car }) {
                     <p className="text-gray-600 text-sm line-clamp-3">{car.description}</p>
                 )}
             </div>
+            <Link to={`/car/${car._id}`} className="block w-full text-center bg-slate-900 text-white py-2 rounded hover:bg-slate-700 transition">
+                View Details
+            </Link>
         </div>
     )
 }

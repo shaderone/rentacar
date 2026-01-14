@@ -47,6 +47,20 @@ export const getCars = createAsyncThunk(
     }
 )
 
+// Get single car
+export const getCar = createAsyncThunk(
+    'cars/getOne',
+    async (id, thunkAPI) => {
+        try {
+            const token = thunkAPI.getState().auth.user.token
+            return await carService.getCar(id, token)
+        } catch (error) {
+            const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
+            return thunkAPI.rejectWithValue(message)
+        }
+    }
+)
+
 export const carSlice = createSlice({
     name: 'car',
     initialState,
@@ -84,6 +98,18 @@ export const carSlice = createSlice({
                 state.cars = action.payload
             })
             .addCase(getCars.rejected, (state, action) => {
+                state.isLoading = false
+                state.isError = true
+                state.message = action.payload
+            }).addCase(getCar.pending, (state) => {
+                state.isLoading = true
+            })
+            .addCase(getCar.fulfilled, (state, action) => {
+                state.isLoading = false
+                state.isSuccess = true
+                state.car = action.payload // Store the specific car details
+            })
+            .addCase(getCar.rejected, (state, action) => {
                 state.isLoading = false
                 state.isError = true
                 state.message = action.payload
