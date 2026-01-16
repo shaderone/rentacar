@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import carService from './carService'
 
-// 1. Initial State (The empty vault)
 const initialState = {
     cars: [],
     car: {},
@@ -11,14 +10,11 @@ const initialState = {
     message: '',
 }
 
-// 2. Create Car Thunk (The Async Action)
-// This function talks to the Service, waits, and returns the result to the Slice
+// 2. Create Car Thunk
 export const createCar = createAsyncThunk(
     'cars/create',
     async (carData, thunkAPI) => {
         try {
-            // We need the token from the Auth part of the state!
-            // thunkAPI.getState() lets us look into other parts of the Redux Store
             const token = thunkAPI.getState().auth.user.token
             return await carService.createCar(carData, token)
         } catch (error) {
@@ -52,8 +48,36 @@ export const getCar = createAsyncThunk(
     'cars/getOne',
     async (id, thunkAPI) => {
         try {
+            // UPDATED: No token needed here anymore!
+            return await carService.getCar(id)
+        } catch (error) {
+            const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
+            return thunkAPI.rejectWithValue(message)
+        }
+    }
+)
+
+// Delete Car
+export const deleteCar = createAsyncThunk(
+    'cars/delete',
+    async (id, thunkAPI) => {
+        try {
             const token = thunkAPI.getState().auth.user.token
-            return await carService.getCar(id, token)
+            return await carService.deleteCar(id, token)
+        } catch (error) {
+            const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
+            return thunkAPI.rejectWithValue(message)
+        }
+    }
+)
+
+// Update Car
+export const updateCar = createAsyncThunk(
+    'cars/update',
+    async ({ id, carData }, thunkAPI) => {
+        try {
+            const token = thunkAPI.getState().auth.user.token
+            return await carService.updateCar(id, carData, token)
         } catch (error) {
             const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
             return thunkAPI.rejectWithValue(message)
@@ -65,56 +89,82 @@ export const carSlice = createSlice({
     name: 'car',
     initialState,
     reducers: {
-        // Standard synchronous reducer (simple logic)
         reset: (state) => initialState,
     },
-    // Extra Reducers: Handle the lifecycle of the Thunks (Async logic)
     extraReducers: (builder) => {
         builder
-            // --- Create Car Lifecycle ---
             .addCase(createCar.pending, (state) => {
                 state.isLoading = true
             })
             .addCase(createCar.fulfilled, (state, action) => {
                 state.isLoading = false
                 state.isSuccess = true
-                // Add the new car to the existing list
                 state.cars.push(action.payload)
-                state.car = action.payload
+                // Optional: Don't set state.car here if you want the form to clear cleanly
             })
             .addCase(createCar.rejected, (state, action) => {
                 state.isLoading = false
                 state.isError = true
                 state.message = action.payload
             })
-            // --- Get Cars Lifecycle ---
             .addCase(getCars.pending, (state) => {
                 state.isLoading = true
             })
             .addCase(getCars.fulfilled, (state, action) => {
                 state.isLoading = false
                 state.isSuccess = true
-                // Replace the empty array with the cars from backend
                 state.cars = action.payload
             })
             .addCase(getCars.rejected, (state, action) => {
                 state.isLoading = false
                 state.isError = true
                 state.message = action.payload
-            }).addCase(getCar.pending, (state) => {
+            })
+            .addCase(getCar.pending, (state) => {
                 state.isLoading = true
             })
             .addCase(getCar.fulfilled, (state, action) => {
                 state.isLoading = false
                 state.isSuccess = true
-                state.car = action.payload // Store the specific car details
+                state.car = action.payload
             })
             .addCase(getCar.rejected, (state, action) => {
                 state.isLoading = false
                 state.isError = true
                 state.message = action.payload
+            })// DELETE CASES
+            .addCase(deleteCar.pending, (state) => {
+                state.isLoading = true
             })
-    },
+            .addCase(deleteCar.fulfilled, (state, action) => {
+                state.isLoading = false
+                state.isSuccess = true
+                // Remove the deleted car from the local array instantly
+                state.cars = state.cars.filter((car) => car._id !== action.payload.id)
+            })
+            .addCase(deleteCar.rejected, (state, action) => {
+                state.isLoading = false
+                state.isError = true
+                state.message = action.payload
+            })
+
+            // UPDATE CASES
+            .addCase(updateCar.pending, (state) => {
+                state.isLoading = true
+            })
+            .addCase(updateCar.fulfilled, (state, action) => {
+                state.isLoading = false
+                state.isSuccess = true
+                state.cars = state.cars.map((car) =>
+                    car._id === action.payload._id ? action.payload : car
+                )
+            })
+            .addCase(updateCar.rejected, (state, action) => {
+                state.isLoading = false
+                state.isError = true
+                state.message = action.payload
+            })
+    }
 })
 
 export const { reset } = carSlice.actions

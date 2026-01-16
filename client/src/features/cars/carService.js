@@ -1,7 +1,5 @@
 import axios from 'axios'
 
-// 1. Use the Env Variable
-// Result: "/api" + "/cars/" = "/api/cars/"
 const API_URL = `${import.meta.env.VITE_API_URL || '/api'}/cars/`
 
 // Create new car
@@ -9,7 +7,8 @@ const createCar = async (carData, token) => {
     const config = {
         headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
+            // REMOVED: 'Content-Type': 'multipart/form-data', 
+            // Why? Axios detects FormData and sets the correct header + boundary automatically.
         },
     }
 
@@ -17,20 +16,37 @@ const createCar = async (carData, token) => {
     return response.data
 }
 
-// Get all cars
+// Get all cars (Public)
 const getCars = async () => {
     const response = await axios.get(API_URL)
     return response.data
 }
 
-// Get single car by ID
-const getCar = async (carId, token) => {
+// Get single car by ID (Public)
+// UPDATED: Removed token requirement so guests can see car details
+const getCar = async (carId) => {
+    const response = await axios.get(API_URL + carId)
+    return response.data
+}
+
+// Delete user car
+const deleteCar = async (carId, token) => {
     const config = {
         headers: { Authorization: `Bearer ${token}` },
     }
-    // API_URL already has the slash at the end, so just add ID
-    // "/api/cars/" + "123" = "/api/cars/123"
-    const response = await axios.get(API_URL + carId, config)
+    const response = await axios.delete(API_URL + carId, config)
+    return response.data
+}
+
+// Update user car
+const updateCar = async (carId, carData, token) => {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${token}`,
+            // No Content-Type needed for FormData, Axios handles it
+        },
+    }
+    const response = await axios.put(API_URL + carId, carData, config)
     return response.data
 }
 
@@ -38,6 +54,8 @@ const carService = {
     createCar,
     getCars,
     getCar,
+    deleteCar,
+    updateCar,
 }
 
 export default carService
