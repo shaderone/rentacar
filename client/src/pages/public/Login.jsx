@@ -21,12 +21,20 @@ function Login() {
 
     useEffect(() => {
         if (isError) {
-            // ideally show a toast notification here
-            console.error(message)
+            toast.error(message)
         }
 
         if (isSuccess || user) {
-            navigate('/')
+            console.log(user.role)
+            if (user.role === 'host') {
+                navigate('/host/dashboard')
+            } else if (user.role === 'admin') {
+                // navigate('/admin/dashboard') // Admin dashboard route (to be implemented)
+                navigate('/')
+            }
+            else {
+                navigate('/') // or '/my-bookings' for users
+            }
         }
 
         dispatch(reset())

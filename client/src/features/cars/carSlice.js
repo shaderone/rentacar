@@ -85,6 +85,20 @@ export const updateCar = createAsyncThunk(
     }
 )
 
+// Get User's Cars (Host Fleet)
+export const getMyCars = createAsyncThunk(
+    'cars/getMyCars',
+    async (_, thunkAPI) => {
+        try {
+            const token = thunkAPI.getState().auth.user.token
+            return await carService.getMyCars(token)
+        } catch (error) {
+            const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
+            return thunkAPI.rejectWithValue(message)
+        }
+    }
+)
+
 export const carSlice = createSlice({
     name: 'car',
     initialState,
@@ -160,6 +174,19 @@ export const carSlice = createSlice({
                 )
             })
             .addCase(updateCar.rejected, (state, action) => {
+                state.isLoading = false
+                state.isError = true
+                state.message = action.payload
+            })
+            .addCase(getMyCars.pending, (state) => {
+                state.isLoading = true
+            })
+            .addCase(getMyCars.fulfilled, (state, action) => {
+                state.isLoading = false
+                state.isSuccess = true
+                state.cars = action.payload // 👈 Populates state.cars with ONLY the host's cars
+            })
+            .addCase(getMyCars.rejected, (state, action) => {
                 state.isLoading = false
                 state.isError = true
                 state.message = action.payload

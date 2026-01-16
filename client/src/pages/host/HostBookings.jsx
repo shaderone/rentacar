@@ -128,7 +128,13 @@ function HostBookings() {
                 <div className="flex flex-col md:flex-row justify-between items-end mb-10">
                     <div>
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold tracking-widest uppercase text-xs">Management</span>
-                        <h1 className="text-4xl font-black text-slate-900 dark:text-white mt-2">Requests</h1>
+                        <div className="flex items-center gap-4 mt-2">
+                            <h1 className="text-4xl font-black text-slate-900 dark:text-white">Requests</h1>
+
+                            <span className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-bold px-3 py-1 rounded-full">
+                                {bookings.length} Total
+                            </span>
+                        </div>
                     </div>
                 </div>
 

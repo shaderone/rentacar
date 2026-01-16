@@ -50,12 +50,22 @@ const updateCar = async (carId, carData, token) => {
     return response.data
 }
 
+// Get user's own cars (Host)
+const getMyCars = async (token) => {
+    const config = {
+        headers: { Authorization: `Bearer ${token}` },
+    }
+    const response = await axios.get(API_URL + 'my-cars', config)
+    return response.data
+}
+
 const carService = {
     createCar,
     getCars,
     getCar,
     deleteCar,
     updateCar,
+    getMyCars,
 }
 
 export default carService

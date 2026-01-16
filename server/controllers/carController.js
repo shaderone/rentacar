@@ -162,10 +162,24 @@ const getCars = asyncHandler(async (req, res) => {
     res.status(200).json(cars);
 });
 
+// @desc    Get cars for logged in host
+// @route   GET /api/cars/my-cars
+// @access  Private
+// get cars for the logged in host
+const getMyCars = async (req, res) => {
+    try {
+        const cars = await Car.find({ owner: req.user.id }).sort({ createdAt: -1 })
+        res.status(200).json(cars)
+    } catch (error) {
+        res.status(500).json({ message: error.message })
+    }
+}
+
 module.exports = {
     getCars,
     createCar,
     updateCar,
     deleteCar,
-    getCarById
+    getCarById,
+    getMyCars,
 }
