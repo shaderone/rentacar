@@ -26,6 +26,7 @@ const carSchema = new mongoose.Schema(
             type: String,
             required: true,
             unique: true,
+            uppercase: true,
             trim: true,
         },
         pricePerDay: {
@@ -52,6 +53,10 @@ const carSchema = new mongoose.Schema(
             type: [String],
             default: [],
         },
+        features: {
+            type: [String], // Array of strings e.g. ["GPS", "Bluetooth", "Sunroof"]
+            default: []
+        },
         status: {
             type: String,
             enum: ['Available', 'Rented', 'Maintenance'],
@@ -66,6 +71,12 @@ const carSchema = new mongoose.Schema(
             required: true,
             trim: true,
         },
+        location: {
+            type: String,
+            required: [true, 'Please add a location (e.g., Kochi, Trivandrum)'],
+            trim: true,
+        }
+
     },
     { timestamps: true }
 );

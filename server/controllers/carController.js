@@ -74,18 +74,41 @@ const updateCar = asyncHandler(async (req, res) => {
         throw new Error('Car not found');
     }
 
-    // Check if the user trying to update is the owner
-    // Note: car.owner is an ObjectId, so we use .toString() to compare
+    // Check ownership
     if (car.owner.toString() !== req.user.id) {
         res.status(401);
         throw new Error('Not authorized to update this car');
     }
 
-    // Update the car
+    // --- PREPARE DATA ---
+    let updatedData = { ...req.body };
+
+    // 🛠️ FIX FOR FEATURES "ONE CHIP" BUG
+    // If features comes as a string (from FormData), we must parse it back to an Array
+    if (req.body.features) {
+        try {
+            // Check if it's a stringified array like "['GPS','AC']"
+            if (typeof req.body.features === 'string') {
+                updatedData.features = JSON.parse(req.body.features);
+            }
+        } catch (error) {
+            // If parsing fails, just wrap it in an array or keep as is
+            console.error("Error parsing features:", error);
+            updatedData.features = [req.body.features];
+        }
+    }
+
+    // Handle New Images
+    if (req.files && req.files.length > 0) {
+        const newImages = req.files.map(file => file.path);
+        updatedData.images = newImages;
+    }
+
+    // Perform Update
     const updatedCar = await Car.findByIdAndUpdate(
         req.params.id,
-        req.body,
-        { new: true } // Return the updated version, not the old one
+        updatedData,
+        { new: true }
     );
 
     res.json(updatedCar);
@@ -93,30 +116,43 @@ const updateCar = asyncHandler(async (req, res) => {
 
 // @desc    Delete car
 // @route   DELETE /api/cars/:id
-// @access  Private (Owner only)
+// @access  Private
 const deleteCar = asyncHandler(async (req, res) => {
-    const car = await Car.findById(req.params.id);
+    const car = await Car.findById(req.params.id)
 
     if (!car) {
-        res.status(404);
-        throw new Error('Car not found');
+        res.status(404)
+        throw new Error('Car not found')
     }
 
-    // Check ownership
-    if (car.owner.toString() !== req.user.id) {
-        res.status(401);
-        throw new Error('Not authorized to delete this car');
+    // 1. Check if req.user exists (set by middleware)
+    if (!req.user) {
+        res.status(401)
+        throw new Error('User not found')
     }
 
-    await car.deleteOne(); // or car.remove() depending on Mongoose version
+    // 2. CHECK OWNERSHIP
+    // ERROR SOURCE: Make sure you use 'req.user.id', NOT 'user.id' here!
+    const isOwner = String(car.owner) === String(req.user.id)
 
-    res.json({ message: 'Car removed' });
-});
+    // Fallback for older data
+    const isUserFieldMatch = car.user && String(car.user) === String(req.user.id)
+
+    if (!isOwner && !isUserFieldMatch) {
+        res.status(401)
+        throw new Error('User not authorized to delete this car')
+    }
+
+    // 3. DELETE
+    await car.deleteOne()
+
+    res.status(200).json({ id: req.params.id })
+})
 
 // @desc    Get all cars (Public)
 // @route   GET /api/cars
 // @access  Public
-const getAllCars = asyncHandler(async (req, res) => {
+const getCars = asyncHandler(async (req, res) => {
     // Only show cars that are Approved AND Available
     const cars = await Car.find({
         // TODO: Uncomment this when Admin Approval workflow is ready
@@ -126,4 +162,10 @@ const getAllCars = asyncHandler(async (req, res) => {
     res.status(200).json(cars);
 });
 
-module.exports = { createCar, getCarById, updateCar, deleteCar, getAllCars };
+module.exports = {
+    getCars,
+    createCar,
+    updateCar,
+    deleteCar,
+    getCarById
+}

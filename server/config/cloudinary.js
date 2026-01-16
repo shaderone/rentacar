@@ -23,7 +23,7 @@ const storage = new CloudinaryStorage({
     cloudinary: cloudinary, // use the configured cloudinary instance
     params: {
         folder: 'rentacar', // folder name to use in cloudinary
-        allowed_formats: ['jpg', 'jpeg', 'png'], // allowed image formats
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'avif'], // allowed image formats
         // transformation: [{width : 500, height : 500, crop : 'scale'}] // resize images to 500x500 and scale them }]
     }
 })
