@@ -4,39 +4,39 @@ const User = require('../models/User');
 const asyncHandler = require('express-async-handler');
 
 // Middleware to protect routes and ensure user is authenticated. before accessing any protected routes.
-const protect = async (req, res, next) => {
+const protect = asyncHandler(async (req, res, next) => {
     let token;
 
-    // 1. Check if the token exists in the cookies
-    token = req.cookies.jwt;
-
-    if (token) {
-        // Custom try catch because asyncHandler won't work here. the reason is :
-        // jwt.verify() throws generic errors like "jwt malformed" or "jwt expired". which we cannot catch in asyncHandler because its not an async function.
+    // 👇 1. Look for token in the Authorization Header (Bearer Token)
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         try {
-            // 2. Verify the token signature
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            // console.log('Decoded JWT:', decoded);
+            // Get token from header (split "Bearer <token>")
+            token = req.headers.authorization.split(' ')[1];
 
-            // 3. Find the user associated with this token (exclude password)
-            // We attach the user object to the 'req' object so routes can use it
-            req.user = await User.findById(decoded.id);
+            // 2. Verify token
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+            // 3. Get user from the token
+            req.user = await User.findById(decoded.id).select('-password');
 
             if (!req.user) {
                 res.status(401);
                 throw new Error('Not authorized, user not found');
             }
 
-            next(); // Pass the baton to the next function (the Controller)
+            next();
         } catch (error) {
             console.error(error);
-            res.status(401).json({ message: 'Not authorized, token failed' });
+            res.status(401);
+            throw new Error('Not authorized, token failed');
         }
-    } else {
-        // No token found in cookies
-        res.status(401).json({ message: 'Not authorized, no token' });
     }
-};
+
+    if (!token) {
+        res.status(401);
+        throw new Error('Not authorized, no token found in headers');
+    }
+});
 
 
 module.exports = { protect };   
