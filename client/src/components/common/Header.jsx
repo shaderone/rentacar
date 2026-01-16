@@ -89,7 +89,7 @@ function Header() {
                             <Link to='/host/my-fleet' className={`transition duration-300 hover:text-emerald-600 dark:hover:text-emerald-400 ${isActive('/host/my-fleet') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                                 My Fleet
                             </Link>
-                            <Link to='/host/bookings' className={`transition duration-300 hover:text-emerald-600 dark:hover:text-emerald-400 ${isActive('/host/bookings') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <Link to='/host/requests' className={`transition duration-300 hover:text-emerald-600 dark:hover:text-emerald-400 ${isActive('/host/requests') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                                 Requests
                             </Link>
                         </>

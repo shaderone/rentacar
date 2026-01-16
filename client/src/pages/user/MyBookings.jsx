@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { getMyBookings, reset } from '../../features/booking/bookingSlice'
+import { getMyBookings, updateBookingStatus, reset } from '../../features/booking/bookingSlice'
 import { useNavigate } from 'react-router-dom'
 import { FaCalendarAlt, FaCheckCircle, FaClock, FaTimesCircle, FaFileInvoice, FaStar, FaCar, FaBan, FaSearch } from 'react-icons/fa'
 import Footer from '../../components/common/Footer'
@@ -27,7 +27,7 @@ function MyBookings() {
     }, [user, navigate, isError, message, dispatch])
 
     // --- FILTER LOGIC ---
-    const tabs = ['All', 'Pending', 'Confirmed', 'Active', 'Completed', 'Cancelled']
+    const tabs = ['All', 'Pending', 'Confirmed', 'Active', 'Completed', 'Cancelled', 'Rejected']
 
     const filteredBookings = bookings.filter((booking) => {
         if (activeTab === 'All') return true
@@ -38,12 +38,11 @@ function MyBookings() {
     const getStatusColor = (status) => {
         switch (status.toLowerCase()) {
             case 'confirmed': return 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
-            // 👇 Added Approved (Same as Confirmed or slightly different)
             case 'approved': return 'text-emerald-600 bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
             case 'active': return 'text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
             case 'completed': return 'text-purple-600 bg-purple-50 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20'
             case 'pending': return 'text-amber-600 bg-amber-50 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
-            case 'cancelled': return 'text-red-600 bg-red-50 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20'
+            case 'cancelled': return 'text-slate-600 bg-slate-100 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
             case 'rejected': return 'text-red-600 bg-red-50 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20'
             default: return 'text-gray-600 bg-gray-50 border-gray-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
         }
@@ -56,7 +55,7 @@ function MyBookings() {
             case 'active': return 'bg-blue-500'
             case 'completed': return 'bg-purple-500'
             case 'pending': return 'bg-amber-400'
-            case 'cancelled': return 'bg-red-500'
+            case 'cancelled': return 'bg-slate-500';
             case 'rejected': return 'bg-red-500'
             default: return 'bg-gray-300 dark:bg-slate-700'
         }
@@ -65,6 +64,15 @@ function MyBookings() {
     const handleCancel = (bookingId) => {
         if (window.confirm('Are you sure you want to cancel?')) {
             dispatch(updateBookingStatus({ id: bookingId, status: 'Cancelled' }))
+        }
+    }
+
+    const handlePayment = (id) => {
+        // In a real app, this is where Stripe/Razorpay logic goes.
+        // For this project, we simulate an instant successful payment.
+        if (window.confirm("Proceed to payment simulation?")) {
+            dispatch(updateBookingStatus({ id, status: 'Confirmed' }))
+            alert("Payment Successful! Trip Confirmed.")
         }
     }
 
@@ -195,12 +203,21 @@ function MyBookings() {
                                         )}
 
                                         {/* CASE 2: APPROVED (Host said YES, User needs to PAY) */}
-                                        {booking.status === 'Approved' && (
+                                        {/* {booking.status === 'Approved' && (
                                             <button
                                                 onClick={() => navigate(`/payment/${booking._id}`)} // You'll need a payment page
                                                 className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold shadow-lg shadow-emerald-500/30 hover:bg-emerald-700 transition flex items-center gap-2 animate-pulse"
                                             >
                                                 <FaCheckCircle /> Pay Now
+                                            </button>
+                                        )} */} {/* a new page will be shown later*/}
+
+                                        {booking.status === 'Approved' && (
+                                            <button
+                                                onClick={() => handlePayment(booking._id)}
+                                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-bold transition shadow-md"
+                                            >
+                                                Pay Now
                                             </button>
                                         )}
 
@@ -230,8 +247,8 @@ function MyBookings() {
                                             </>
                                         )}
 
-                                        {/* CANCEL BUTTON (Available only in early stages) */}
-                                        {['Pending', 'Approved', 'Confirmed'].includes(booking.status) && (
+                                        {/* CANCEL BUTTON (Only for Pending or Approved) */}
+                                        {['Pending', 'Approved'].includes(booking.status) && (
                                             <button
                                                 onClick={() => handleCancel(booking._id)}
                                                 className="px-3 py-2 ml-2 rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 text-xs font-bold hover:bg-red-500 hover:text-white dark:hover:bg-red-500 dark:hover:text-white transition border border-red-100 dark:border-red-500/20 flex items-center gap-1"

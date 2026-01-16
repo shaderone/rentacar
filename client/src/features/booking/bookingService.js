@@ -25,8 +25,36 @@ const getHostBookings = async (token) => {
 
 // Update status (Approve, Reject, or Cancel by User)
 const updateBookingStatus = async (bookingId, status, token) => {
+    const config = {
+        headers: { Authorization: `Bearer ${token}` }
+    }
+    const response = await axios.put(
+        API_URL + bookingId,
+        { status },
+        config
+    )
+    return response.data
+}
+
+// ✅ THE FIXED CODE
+const cancelBooking = async (bookingId, token) => {
+    // 1. Define the config with the token
+    const config = {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    }
+
+    // 2. Now 'config' exists and can be passed to axios
+    const response = await axios.put(API_URL + bookingId + '/cancel', {}, config)
+    // (Note: Make sure your URL matches your backend route!)
+
+    return response.data
+}
+
+const notifyUser = async (bookingId, token) => {
     const config = { headers: { Authorization: `Bearer ${token}` } }
-    const response = await axios.put(API_URL + bookingId, { status }, config)
+    const response = await axios.post(API_URL + bookingId + '/notify', {}, config)
     return response.data
 }
 
@@ -34,7 +62,9 @@ const bookingService = {
     createBooking,
     getMyBookings,
     getHostBookings,
-    updateBookingStatus
+    updateBookingStatus,
+    cancelBooking,
+    notifyUser,
 }
 
 export default bookingService

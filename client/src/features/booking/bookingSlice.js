@@ -56,10 +56,11 @@ export const getHostBookings = createAsyncThunk(
 
 // 4. Update Status (Approve/Reject/Cancel/Complete)
 export const updateBookingStatus = createAsyncThunk(
-    'bookings/updateStatus',
-    async ({ id, status }, thunkAPI) => {
+    'booking/updateStatus',
+    async ({ id, status }, thunkAPI) => { // Receiving an object { id, status }
         try {
             const token = thunkAPI.getState().auth.user.token
+            // 👇 PASSING (id, status, token) to service
             return await bookingService.updateBookingStatus(id, status, token)
         } catch (error) {
             const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
@@ -67,6 +68,27 @@ export const updateBookingStatus = createAsyncThunk(
         }
     }
 )
+
+export const cancelBooking = createAsyncThunk('booking/cancel', async (id, thunkAPI) => {
+    try {
+        const token = thunkAPI.getState().auth.user.token
+        // Pass the ID and Token to the service
+        return await bookingService.cancelBooking(id, token)
+    } catch (error) {
+        const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
+        return thunkAPI.rejectWithValue(message)
+    }
+})
+
+export const notifyUser = createAsyncThunk('booking/notify', async (id, thunkAPI) => {
+    try {
+        const token = thunkAPI.getState().auth.user.token
+        return await bookingService.notifyUser(id, token)
+    } catch (error) {
+        const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
+        return thunkAPI.rejectWithValue(message)
+    }
+})
 
 export const bookingSlice = createSlice({
     name: 'booking',
@@ -139,6 +161,24 @@ export const bookingSlice = createSlice({
                 )
             })
             .addCase(updateBookingStatus.rejected, (state, action) => {
+                state.isLoading = false
+                state.isError = true
+                state.message = action.payload
+            }).addCase(cancelBooking.pending, (state) => {
+                state.isLoading = true
+            })
+            .addCase(cancelBooking.fulfilled, (state, action) => {
+                state.isLoading = false
+                state.isSuccess = true
+
+                // ⚡ INSTANT UI UPDATE:
+                // Find the booking in the local state and mark it as Cancelled immediately
+                const index = state.bookings.findIndex(booking => booking._id === action.payload._id)
+                if (index !== -1) {
+                    state.bookings[index] = action.payload // Replace with the updated booking from backend
+                }
+            })
+            .addCase(cancelBooking.rejected, (state, action) => {
                 state.isLoading = false
                 state.isError = true
                 state.message = action.payload

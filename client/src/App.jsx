@@ -46,7 +46,7 @@ function App() {
           <Route path='/host/dashboard' element={<HostDashboard />} />
           <Route path='/host/add-car' element={<AddCar />} />
           <Route path='/host/my-fleet' element={<MyFleet />} />
-          <Route path='/host/bookings' element={<HostBookings />} />
+          <Route path='/host/requests' element={<HostBookings />} />
           <Route path='/host/edit-car/:id' element={<EditCar />} />
         </Route>
 

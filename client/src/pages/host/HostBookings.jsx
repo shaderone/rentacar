@@ -1,85 +1,57 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { FaSearch, FaCheck, FaTimes, FaCalendarAlt, FaUser, FaClock, FaCheckCircle, FaBan, FaFlagCheckered, FaBell, FaKey, FaFileInvoice, FaCarSide } from 'react-icons/fa'
+import { useSelector, useDispatch } from 'react-redux'
+// 👇 IMPORT REDUX ACTIONS
+import { getHostBookings, updateBookingStatus, reset, notifyUser } from '../../features/booking/bookingSlice'
+import { FaSearch, FaCheck, FaTimes, FaCalendarAlt, FaUser, FaClock, FaCheckCircle, FaBan, FaFlagCheckered, FaBell, FaKey, FaFileInvoice, FaCarSide, FaSpinner } from 'react-icons/fa'
 import Footer from '../../components/common/Footer'
 
 function HostBookings() {
+    const dispatch = useDispatch();
+    const [activeTab, setActiveTab] = useState('Pending');
 
-    const [activeTab, setActiveTab] = useState('Pending')
+    // --- REDUX STATE ---
+    const { bookings, isLoading, isError, message } = useSelector((state) => state.bookings);
 
-    // --- MOCK DATA ---
-    const bookings = [
-        {
-            id: 1,
-            user: { name: 'Alex Johnson', image: null },
-            car: { make: 'Toyota', model: 'Camry SE', image: 'https://images.unsplash.com/photo-1619767886558-efdc259cde1a?q=80&w=1000&auto=format&fit=crop' },
-            startDate: '2025-12-12',
-            endDate: '2025-12-14',
-            totalPrice: 6854,
-            status: 'Pending',
-            requestedAt: '2 hours ago'
-        },
-        {
-            id: 5,
-            user: { name: 'John Doe', image: null },
-            car: { make: 'Hyundai', model: 'Creta', image: 'https://images.unsplash.com/photo-1609529669235-c07e4e1bd6e9?q=80&w=1000&auto=format&fit=crop' },
-            startDate: '2025-12-12',
-            endDate: '2025-12-14',
-            totalPrice: 5500,
-            status: 'Approved', // Host approved, waiting for user payment
-            requestedAt: '5 hours ago'
-        },
-        {
-            id: 2,
-            user: { name: 'Sarah Connor', image: null },
-            car: { make: 'Honda', model: 'City', image: 'https://images.unsplash.com/photo-1590362891991-f776e747a588?q=80&w=1000&auto=format&fit=crop' },
-            startDate: '2025-12-15',
-            endDate: '2025-12-18',
-            totalPrice: 9200,
-            status: 'Confirmed', // User paid, ready for pickup
-            requestedAt: '1 day ago'
-        },
-        {
-            id: 6,
-            user: { name: 'Bruce Wayne', image: null },
-            car: { make: 'Lamborghini', model: 'Urus', image: 'https://images.unsplash.com/photo-1621135802920-133df287f89c?q=80&w=1000&auto=format&fit=crop' },
-            startDate: '2025-12-10',
-            endDate: '2025-12-15',
-            totalPrice: 150000,
-            status: 'Active', // Car is currently out
-            requestedAt: '2 days ago'
-        },
-        {
-            id: 3,
-            user: { name: 'Mike Ross', image: null },
-            car: { make: 'Mahindra', model: 'Thar', image: 'https://images.unsplash.com/photo-1633158829585-23ba8f7c8caf?q=80&w=1000&auto=format&fit=crop' },
-            startDate: '2025-11-20',
-            endDate: '2025-11-25',
-            totalPrice: 15400,
-            status: 'Completed',
-            requestedAt: '2 weeks ago'
-        },
-        {
-            id: 4,
-            user: { name: 'Harvey Specter', image: null },
-            car: { make: 'BMW', model: '5 Series', image: 'https://images.unsplash.com/photo-1555215695-3004980adade?q=80&w=1000&auto=format&fit=crop' },
-            startDate: '2025-12-20',
-            endDate: '2025-12-22',
-            totalPrice: 22000,
-            status: 'Cancelled',
-            requestedAt: '3 days ago'
-        },
-    ]
+    // --- FETCH DATA ON LOAD ---
+    useEffect(() => {
+        if (isError) {
+            console.error(message)
+        }
+        dispatch(getHostBookings())
 
-    // Added 'Active' and 'Approved' to tabs logic
-    const tabs = ['Pending', 'Approved', 'Confirmed', 'Active', 'Completed', 'Cancelled']
-    const filteredBookings = bookings.filter(booking => booking.status === activeTab)
+        // Optional: Reset on unmount if you want clear state every time
+        // return () => { dispatch(reset()) }
+    }, [dispatch, isError, message])
 
-    const handleAction = (id, action) => {
-        alert(`${action} triggered for booking #${id}`)
+    // --- FILTER LOGIC ---
+    // Added 'Rejected' to tabs so you can see history
+    const tabs = ['All', 'Pending', 'Approved', 'Confirmed', 'Active', 'Completed', 'Cancelled (by user)', 'Rejected']
+
+    const filteredBookings = bookings.filter(booking => {
+        // Case-insensitive comparison just to be safe
+        if (activeTab === 'All') return true // Show everything
+        if (activeTab === 'Cancelled (by user)') {
+            return booking.status === 'Cancelled'
+        }
+        return booking.status.toLowerCase() === activeTab.toLowerCase()
+    })
+
+    // --- ACTION HANDLER ---
+    const handleAction = (id, newStatus) => {
+        if (newStatus === 'Notified') {
+            dispatch(notifyUser(id)) // <--- Dispatches to backend now
+            alert("Notification request sent to server!")
+            return
+        }
+
+        const confirmMsg = `Are you sure you want to change status to ${newStatus}?`
+        if (window.confirm(confirmMsg)) {
+            dispatch(updateBookingStatus({ id, status: newStatus }))
+        }
     }
 
-    // --- STYLE LOGIC ---
+    // --- STYLE LOGIC (Kept exactly as yours) ---
     const getCardStyle = (status) => {
         switch (status) {
             case 'Pending':
@@ -90,7 +62,7 @@ function HostBookings() {
                     iconColor: 'text-amber-500/10 dark:text-amber-500/20',
                     Icon: FaClock
                 }
-            case 'Approved': // Approved but not paid
+            case 'Approved':
                 return {
                     container: 'bg-sky-50 border-l-sky-500 dark:bg-sky-500/5 dark:border-l-sky-500',
                     text: 'text-sky-900 dark:text-sky-100',
@@ -98,7 +70,7 @@ function HostBookings() {
                     iconColor: 'text-sky-500/10 dark:text-sky-500/20',
                     Icon: FaBell
                 }
-            case 'Confirmed': // Paid, Ready to start
+            case 'Confirmed':
                 return {
                     container: 'bg-emerald-50 border-l-emerald-500 dark:bg-emerald-500/5 dark:border-l-emerald-500',
                     text: 'text-emerald-900 dark:text-emerald-100',
@@ -106,7 +78,7 @@ function HostBookings() {
                     iconColor: 'text-emerald-500/10 dark:text-emerald-500/20',
                     Icon: FaCheckCircle
                 }
-            case 'Active': // In Trip
+            case 'Active':
                 return {
                     container: 'bg-blue-50 border-l-blue-600 dark:bg-blue-600/5 dark:border-l-blue-500',
                     text: 'text-blue-900 dark:text-blue-100',
@@ -124,6 +96,14 @@ function HostBookings() {
                 }
             case 'Cancelled':
                 return {
+                    container: 'bg-slate-100 border-l-slate-500 dark:bg-slate-800 dark:border-l-slate-500',
+                    text: 'text-slate-700 dark:text-slate-300',
+                    subText: 'text-slate-500 dark:text-slate-400',
+                    iconColor: 'text-slate-500/10 dark:text-slate-500/20',
+                    Icon: FaTimes
+                }
+            case 'Rejected': // Added Rejected styling (same as Cancelled)
+                return {
                     container: 'bg-red-50 border-l-red-500 dark:bg-red-500/5 dark:border-l-red-500',
                     text: 'text-red-900 dark:text-red-100',
                     subText: 'text-red-700/60 dark:text-red-200/60',
@@ -132,6 +112,12 @@ function HostBookings() {
                 }
             default: return { container: '', text: '', subText: '', iconColor: '', Icon: FaCheckCircle }
         }
+    }
+
+    if (isLoading) {
+        return <div className="min-h-screen flex items-center justify-center text-slate-400 font-bold animate-pulse gap-2">
+            <FaSpinner className="animate-spin" /> Loading Requests...
+        </div>
     }
 
     return (
@@ -152,7 +138,7 @@ function HostBookings() {
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`pb-4 px-2 text-sm font-bold transition-all relative flex-shrink-0
+                            className={`pb-4 px-2 text-sm font-bold transition-all relative shrink-0
                                 ${activeTab === tab
                                     ? 'text-slate-900 dark:text-white'
                                     : 'text-gray-400 hover:text-slate-600 dark:hover:text-slate-300'
@@ -169,17 +155,21 @@ function HostBookings() {
                 {/* --- BOOKINGS LIST --- */}
                 <div className="space-y-6">
                     {filteredBookings.length === 0 ? (
-                        <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border border-dashed border-gray-200 dark:border-slate-800">
+                        <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-4xl border border-dashed border-gray-200 dark:border-slate-800">
                             <p className="text-gray-400 font-medium">No {activeTab.toLowerCase()} requests found.</p>
                         </div>
                     ) : (
                         filteredBookings.map((booking) => {
                             const style = getCardStyle(booking.status)
 
-                            return (
-                                <div key={booking.id} className={`relative p-6 rounded-2xl shadow-sm hover:shadow-lg transition-all border-l-4 overflow-hidden group ${style.container}`}>
+                            // Backend uses '_id', not 'id'
+                            // Backend uses 'images' array, not 'image' string
+                            const carImage = booking.car?.images?.[0] || 'https://via.placeholder.com/300x200?text=No+Image'
 
-                                    {/* --- WATERMARK ICON (Background) --- */}
+                            return (
+                                <div key={booking._id} className={`relative p-6 rounded-2xl shadow-sm hover:shadow-lg transition-all border-l-4 overflow-hidden group ${style.container}`}>
+
+                                    {/* --- WATERMARK ICON --- */}
                                     <div className={`absolute -right-6 -bottom-8 text-9xl transform rotate-12 select-none pointer-events-none transition-transform group-hover:scale-110 duration-700 ${style.iconColor}`}>
                                         <style.Icon />
                                     </div>
@@ -188,12 +178,16 @@ function HostBookings() {
 
                                         {/* 1. Car Info */}
                                         <div className="flex items-center gap-5 w-full lg:w-1/3">
-                                            <div className="w-24 h-16 bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-sm flex-shrink-0">
-                                                <img src={booking.car.image} alt="car" className="w-full h-full object-cover" />
+                                            <div className="w-24 h-16 bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-sm shrink-0">
+                                                <img src={carImage} alt="car" className="w-full h-full object-cover" />
                                             </div>
                                             <div>
-                                                <h3 className={`font-black text-lg leading-none mb-1 ${style.text}`}>{booking.car.make} {booking.car.model}</h3>
-                                                <p className={`text-xs font-bold uppercase tracking-wider ${style.subText}`}>Trip ID: #{booking.id}92</p>
+                                                <h3 className={`font-black text-lg leading-none mb-1 ${style.text}`}>
+                                                    {booking.car?.make} {booking.car?.model}
+                                                </h3>
+                                                <p className={`text-xs font-bold uppercase tracking-wider ${style.subText}`}>
+                                                    Trip ID: #{booking._id.slice(-6).toUpperCase()}
+                                                </p>
                                             </div>
                                         </div>
 
@@ -203,7 +197,9 @@ function HostBookings() {
                                                 <p className={`text-[10px] font-bold uppercase mb-1 ${style.subText}`}>Renter</p>
                                                 <div className="flex items-center gap-2">
                                                     <FaUser className={`text-xs ${style.subText}`} />
-                                                    <span className={`font-bold ${style.text}`}>{booking.user.name}</span>
+                                                    <span className={`font-bold ${style.text}`}>
+                                                        {booking.user?.name || 'Unknown'}
+                                                    </span>
                                                 </div>
                                             </div>
                                             <div>
@@ -217,49 +213,49 @@ function HostBookings() {
                                             </div>
                                         </div>
 
-                                        {/* 3. Price & DYNAMIC ACTIONS */}
+                                        {/* 3. Price & ACTIONS */}
                                         <div className="w-full lg:w-1/3 flex flex-row justify-between items-center lg:justify-end gap-6">
                                             <div className="text-right">
                                                 <p className={`text-[10px] font-bold uppercase mb-1 ${style.subText}`}>Total Value</p>
                                                 <p className={`text-2xl font-black ${style.text}`}>₹{booking.totalPrice}</p>
                                             </div>
 
-                                            {/* --- ACTION BUTTON LOGIC --- */}
+                                            {/* --- ACTIONS --- */}
 
                                             {/* A. Pending -> Approve/Reject */}
                                             {booking.status === 'Pending' && (
                                                 <div className="flex gap-3">
-                                                    <button onClick={() => handleAction(booking.id, 'Rejected')} className="w-12 h-12 rounded-full bg-white dark:bg-slate-800 text-red-500 hover:bg-red-500 hover:text-white transition flex items-center justify-center shadow-lg" title="Reject">
+                                                    <button onClick={() => handleAction(booking._id, 'Rejected')} className="w-12 h-12 rounded-full bg-white dark:bg-slate-800 text-red-500 hover:bg-red-500 hover:text-white transition flex items-center justify-center shadow-lg" title="Reject">
                                                         <FaTimes size={18} />
                                                     </button>
-                                                    <button onClick={() => handleAction(booking.id, 'Approved')} className="w-12 h-12 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-emerald-500 dark:hover:bg-emerald-400 transition flex items-center justify-center shadow-lg" title="Approve">
+                                                    <button onClick={() => handleAction(booking._id, 'Approved')} className="w-12 h-12 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-emerald-500 dark:hover:bg-emerald-400 transition flex items-center justify-center shadow-lg" title="Approve">
                                                         <FaCheck size={18} />
                                                     </button>
                                                 </div>
                                             )}
 
-                                            {/* B. Approved -> Notify (Remind to Pay) */}
+                                            {/* B. Approved -> Notify */}
                                             {booking.status === 'Approved' && (
-                                                <button onClick={() => handleAction(booking.id, 'Notified')} className="px-6 py-3 rounded-xl bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 font-bold text-xs flex items-center gap-2 hover:bg-sky-200 dark:hover:bg-sky-500/30 transition shadow-sm">
+                                                <button onClick={() => handleAction(booking._id, 'Notified')} className="px-6 py-3 rounded-xl bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 font-bold text-xs flex items-center gap-2 hover:bg-sky-200 dark:hover:bg-sky-500/30 transition shadow-sm">
                                                     <FaBell /> Notify
                                                 </button>
                                             )}
 
-                                            {/* C. Confirmed -> Start Trip (Handover Keys) */}
+                                            {/* C. Confirmed -> Start Trip */}
                                             {booking.status === 'Confirmed' && (
-                                                <button onClick={() => handleAction(booking.id, 'Started Trip')} className="px-6 py-3 rounded-xl bg-emerald-900 dark:bg-white text-white dark:text-emerald-900 font-bold text-xs flex items-center gap-2 hover:bg-emerald-700 dark:hover:bg-gray-200 transition shadow-lg">
+                                                <button onClick={() => handleAction(booking._id, 'Active')} className="px-6 py-3 rounded-xl bg-emerald-900 dark:bg-white text-white dark:text-emerald-900 font-bold text-xs flex items-center gap-2 hover:bg-emerald-700 dark:hover:bg-gray-200 transition shadow-lg">
                                                     <FaKey /> Start Trip
                                                 </button>
                                             )}
 
-                                            {/* D. Active -> End Trip (Return Car) */}
+                                            {/* D. Active -> End Trip */}
                                             {booking.status === 'Active' && (
-                                                <button onClick={() => handleAction(booking.id, 'Ended Trip')} className="px-6 py-3 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-2 hover:bg-blue-700 transition shadow-lg">
+                                                <button onClick={() => handleAction(booking._id, 'Completed')} className="px-6 py-3 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-2 hover:bg-blue-700 transition shadow-lg">
                                                     <FaFlagCheckered /> End Trip
                                                 </button>
                                             )}
 
-                                            {/* E. Completed -> View Invoice (Optional) */}
+                                            {/* E. Completed */}
                                             {booking.status === 'Completed' && (
                                                 <button className={`w-10 h-10 rounded-full flex items-center justify-center transition hover:bg-black/5 dark:hover:bg-white/10 ${style.text}`}>
                                                     <FaFileInvoice />
@@ -267,13 +263,12 @@ function HostBookings() {
                                             )}
 
                                         </div>
-
                                     </div>
 
-                                    {/* Footer Message (Context specific) */}
+                                    {/* Footer Message */}
                                     {booking.status === 'Pending' && (
                                         <div className={`mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex items-center gap-2 text-xs font-bold ${style.text}`}>
-                                            <FaClock className="animate-pulse" /> Action Required: Request received {booking.requestedAt}
+                                            <FaClock className="animate-pulse" /> Action Required: Request received {new Date(booking.createdAt).toLocaleDateString()}
                                         </div>
                                     )}
                                     {booking.status === 'Approved' && (
@@ -287,9 +282,7 @@ function HostBookings() {
                         })
                     )}
                 </div>
-
             </div>
-
             <div className="mt-20 px-6">
                 <Footer />
             </div>
