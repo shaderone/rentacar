@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { getCars } from '../../features/cars/carSlice'
@@ -10,10 +10,30 @@ function Dashboard() {
     const dispatch = useDispatch()
     const { cars, isLoading, isError, message } = useSelector((state) => state.cars)
 
+    // --- 1. LOCAL STATE FOR SEARCH ---
+    const [location, setLocation] = useState('')
+    const [dates, setDates] = useState({ start: '', end: '' })
+
     useEffect(() => {
         if (isError) console.log(message)
         dispatch(getCars())
     }, [isError, message, dispatch])
+
+    // --- 2. EXTRACT UNIQUE LOCATIONS FROM DB ---
+    // This looks at all your cars and finds the unique cities
+    const uniqueLocations = [...new Set(cars.map(car => car.location))].filter(Boolean)
+
+    // --- 3. HANDLE SEARCH ---
+    const handleSearch = () => {
+        // Redirect to /all-cars with query params
+        const queryParams = new URLSearchParams({
+            location: location,
+            start: dates.start,
+            end: dates.end
+        }).toString()
+
+        navigate(`/all-cars?${queryParams}`)
+    }
 
     // Get top 4 cars for display
     const featuredCars = cars.slice(0, 4)
@@ -36,9 +56,7 @@ function Dashboard() {
 
                     {/* Content */}
                     <div className="relative z-10 max-w-3xl mx-auto">
-                        <span className="inline-block py-1 px-3 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold tracking-widest mb-6 border border-emerald-500/30">
-                            PREMIUM RENTALS
-                        </span>
+
                         <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tight leading-tight">
                             Drive the <br /> <span className="text-transparent bg-clip-text bg-linear-to-r from-emerald-400 to-teal-200">Extraordinary.</span>
                         </h1>
@@ -48,19 +66,32 @@ function Dashboard() {
                     </div>
                 </div>
 
-                {/* --- FLOATING SEARCH BAR --- */}
+                {/* --- FLOATING SEARCH BAR (UPDATED) --- */}
                 <div className="absolute -bottom-20 left-0 right-0 px-4 z-20">
                     <div className="max-w-5xl mx-auto bg-white/80 dark:bg-slate-900/90 backdrop-blur-xl p-4 rounded-[2.5rem] shadow-2xl border border-white/50 dark:border-slate-700 flex flex-col lg:flex-row gap-3 items-center transition-colors duration-300">
 
-                        {/* Location Input */}
+                        {/* Location Input (Dynamic) */}
                         <div className="flex-1 bg-white dark:bg-slate-800 rounded-full px-8 py-5 w-full shadow-sm border border-gray-100 dark:border-slate-700 group cursor-pointer hover:shadow-md transition-all">
                             <label className="flex items-center gap-2 text-xs font-bold text-gray-400 mb-1 uppercase tracking-wide group-hover:text-emerald-600 transition">
                                 <FaMapMarkerAlt /> Location
                             </label>
-                            <select className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none appearance-none cursor-pointer">
-                                <option className="dark:bg-slate-800">Kochi, Kerala</option>
-                                <option className="dark:bg-slate-800">Bangalore, Karnataka</option>
-                                <option className="dark:bg-slate-800">Mumbai, Maharashtra</option>
+                            <select
+                                value={location}
+                                onChange={(e) => setLocation(e.target.value)}
+                                className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none appearance-none cursor-pointer"
+                            >
+                                <option value="" className="dark:bg-slate-800">All Locations</option>
+                                {uniqueLocations.length > 0 ? (
+                                    uniqueLocations.map((loc, index) => (
+                                        <option key={index} value={loc} className="dark:bg-slate-800">{loc}</option>
+                                    ))
+                                ) : (
+                                    // Fallback if no cars have locations yet
+                                    <>
+                                        <option value="Kochi" className="dark:bg-slate-800">Kochi</option>
+                                        <option value="Bangalore" className="dark:bg-slate-800">Bangalore</option>
+                                    </>
+                                )}
                             </select>
                         </div>
 
@@ -69,8 +100,13 @@ function Dashboard() {
                             <label className="flex items-center gap-2 text-xs font-bold text-gray-400 mb-1 uppercase tracking-wide group-hover:text-emerald-600 transition">
                                 <FaCalendarAlt /> Pick-up Date
                             </label>
-                            {/* dark:invert makes the calendar icon white in dark mode */}
-                            <input type="date" className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none font-sans dark:invert" />
+                            <input
+                                type="date"
+                                value={dates.start}
+                                onChange={(e) => setDates({ ...dates, start: e.target.value })}
+                                // Removed 'dark:invert', added 'dark:[color-scheme:dark]'
+                                className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none font-sans dark:[color-scheme:dark]"
+                            />
                         </div>
 
                         {/* Drop-off Date */}
@@ -78,11 +114,20 @@ function Dashboard() {
                             <label className="flex items-center gap-2 text-xs font-bold text-gray-400 mb-1 uppercase tracking-wide group-hover:text-emerald-600 transition">
                                 <FaCalendarAlt /> Drop-off Date
                             </label>
-                            <input type="date" className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none font-sans dark:invert" />
+                            <input
+                                type="date"
+                                value={dates.end}
+                                onChange={(e) => setDates({ ...dates, end: e.target.value })}
+                                // Removed 'dark:invert', added 'dark:[color-scheme:dark]'
+                                className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none font-sans dark:[color-scheme:dark]"
+                            />
                         </div>
 
-                        {/* Search Button */}
-                        <button className="w-full lg:w-24 h-20 rounded-4xl bg-slate-900 dark:bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-600 dark:hover:bg-emerald-500 transition duration-300 shadow-lg shadow-slate-900/20 group">
+                        {/* Search Button (With Handler) */}
+                        <button
+                            onClick={handleSearch}
+                            className="w-full lg:w-24 h-20 rounded-4xl bg-slate-900 dark:bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-600 dark:hover:bg-emerald-500 transition duration-300 shadow-lg shadow-slate-900/20 group"
+                        >
                             <FaArrowRight size={24} className="group-hover:-rotate-45 transition duration-300" />
                         </button>
 

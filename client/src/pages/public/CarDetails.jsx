@@ -305,8 +305,9 @@ function CarDetails() {
                                                 name="startDate"
                                                 value={startDate}
                                                 onChange={onChange}
-                                                min={today} // Prevent Past Dates
-                                                className="w-full bg-transparent font-bold text-sm text-slate-900 dark:text-white outline-none dark:invert"
+                                                min={today}
+                                                // Updated class: Removed dark:invert, added dark:[color-scheme:dark]
+                                                className="w-full bg-transparent font-bold text-sm text-slate-900 dark:text-white outline-none dark:scheme-dark"
                                                 required
                                             />
                                             <FaCalendarAlt className="text-gray-400" />
@@ -321,8 +322,9 @@ function CarDetails() {
                                                 name="endDate"
                                                 value={endDate}
                                                 onChange={onChange}
-                                                min={startDate || today} // Prevent End Date before Start Date
-                                                className="w-full bg-transparent font-bold text-sm text-slate-900 dark:text-white outline-none dark:invert"
+                                                min={startDate || today}
+                                                // Updated class: Removed dark:invert, added dark:[color-scheme:dark]
+                                                className="w-full bg-transparent font-bold text-sm text-slate-900 dark:text-white outline-none dark:scheme-dark"
                                                 required
                                             />
                                             <FaCalendarAlt className="text-gray-400" />
