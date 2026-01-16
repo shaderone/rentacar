@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_URL = '/api/bookings/'
+const API_URL = import.meta.env.VITE_API_URL + 'bookings/'
 
 // Create new booking
 const createBooking = async (bookingData, token) => {
