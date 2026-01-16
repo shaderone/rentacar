@@ -3,13 +3,16 @@ import bookingService from './bookingService'
 
 const initialState = {
     bookings: [],
+    booking: {}, // Added single booking state just in case
     isError: false,
     isSuccess: false,
     isLoading: false,
     message: '',
 }
 
-// Create new booking
+// --- THUNKS ---
+
+// 1. Create new booking (For Renters)
 export const createBooking = createAsyncThunk(
     'bookings/create',
     async (bookingData, thunkAPI) => {
@@ -17,16 +20,13 @@ export const createBooking = createAsyncThunk(
             const token = thunkAPI.getState().auth.user.token
             return await bookingService.createBooking(bookingData, token)
         } catch (error) {
-            const message =
-                (error.response && error.response.data && error.response.data.message) ||
-                error.message ||
-                error.toString()
+            const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
             return thunkAPI.rejectWithValue(message)
         }
     }
 )
 
-// Get user bookings
+// 2. Get user's own bookings (For Renters - My Trips)
 export const getMyBookings = createAsyncThunk(
     'bookings/getAll',
     async (_, thunkAPI) => {
@@ -34,10 +34,35 @@ export const getMyBookings = createAsyncThunk(
             const token = thunkAPI.getState().auth.user.token
             return await bookingService.getMyBookings(token)
         } catch (error) {
-            const message =
-                (error.response && error.response.data && error.response.data.message) ||
-                error.message ||
-                error.toString()
+            const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
+            return thunkAPI.rejectWithValue(message)
+        }
+    }
+)
+
+// 3. Get Host's received requests (For Hosts - Dashboard)
+export const getHostBookings = createAsyncThunk(
+    'bookings/getHost',
+    async (_, thunkAPI) => {
+        try {
+            const token = thunkAPI.getState().auth.user.token
+            return await bookingService.getHostBookings(token)
+        } catch (error) {
+            const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
+            return thunkAPI.rejectWithValue(message)
+        }
+    }
+)
+
+// 4. Update Status (Approve/Reject/Cancel/Complete)
+export const updateBookingStatus = createAsyncThunk(
+    'bookings/updateStatus',
+    async ({ id, status }, thunkAPI) => {
+        try {
+            const token = thunkAPI.getState().auth.user.token
+            return await bookingService.updateBookingStatus(id, status, token)
+        } catch (error) {
+            const message = (error.response && error.response.data && error.response.data.message) || error.message || error.toString()
             return thunkAPI.rejectWithValue(message)
         }
     }
@@ -47,10 +72,16 @@ export const bookingSlice = createSlice({
     name: 'booking',
     initialState,
     reducers: {
-        reset: (state) => initialState,
+        reset: (state) => {
+            state.isLoading = false
+            state.isSuccess = false
+            state.isError = false
+            state.message = ''
+        },
     },
     extraReducers: (builder) => {
         builder
+            // --- CREATE BOOKING ---
             .addCase(createBooking.pending, (state) => {
                 state.isLoading = true
             })
@@ -64,6 +95,8 @@ export const bookingSlice = createSlice({
                 state.isError = true
                 state.message = action.payload
             })
+
+            // --- GET MY BOOKINGS (RENTER) ---
             .addCase(getMyBookings.pending, (state) => {
                 state.isLoading = true
             })
@@ -73,6 +106,39 @@ export const bookingSlice = createSlice({
                 state.bookings = action.payload
             })
             .addCase(getMyBookings.rejected, (state, action) => {
+                state.isLoading = false
+                state.isError = true
+                state.message = action.payload
+            })
+
+            // --- GET HOST BOOKINGS (HOST) ---
+            .addCase(getHostBookings.pending, (state) => {
+                state.isLoading = true
+            })
+            .addCase(getHostBookings.fulfilled, (state, action) => {
+                state.isLoading = false
+                state.isSuccess = true
+                state.bookings = action.payload
+            })
+            .addCase(getHostBookings.rejected, (state, action) => {
+                state.isLoading = false
+                state.isError = true
+                state.message = action.payload
+            })
+
+            // --- UPDATE STATUS ---
+            .addCase(updateBookingStatus.pending, (state) => {
+                state.isLoading = true
+            })
+            .addCase(updateBookingStatus.fulfilled, (state, action) => {
+                state.isLoading = false
+                state.isSuccess = true
+                // INSTANT UI UPDATE: Find the booking in our list and update it with the response
+                state.bookings = state.bookings.map((booking) =>
+                    booking._id === action.payload._id ? action.payload : booking
+                )
+            })
+            .addCase(updateBookingStatus.rejected, (state, action) => {
                 state.isLoading = false
                 state.isError = true
                 state.message = action.payload

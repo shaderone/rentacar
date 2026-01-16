@@ -1,23 +1,25 @@
-// App.jsx decides which pages to show based on the route.
-
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Header from './components/common/Header'
-import Login from './pages/public/Login'
-import CarDetails from './pages/public/CarDetails'
+import PrivateRoute from './components/common/PrivateRoute'
+
+// Public Pages
 import Dashboard from './pages/public/Dashboard'
+import Login from './pages/public/Login'
 import Register from './pages/public/Register'
-import MyBookings from './pages/user/myBookings'
 import AllCars from './pages/public/AllCars'
+import CarDetails from './pages/public/CarDetails'
+
+// User Pages
+import MyBookings from './pages/user/MyBookings'
 import Profile from './pages/user/Profile'
 import BookingConfirmation from './pages/user/BookingConfirmation'
-import AddCar from './pages/host/AddCar'
+
+// Host Pages
 import HostDashboard from './pages/host/HostDashboard'
-import PrivateRoute from './components/common/PrivateRoute'
+import AddCar from './pages/host/AddCar'
 import MyFleet from './pages/host/MyFleet'
 import HostBookings from './pages/host/HostBookings'
-import EditCar from './pages/host/editCar'
-
-// ... imports
+import EditCar from './pages/host/EditCar'
 
 function App() {
   return (
@@ -27,12 +29,14 @@ function App() {
         {/* PUBLIC ROUTES */}
         <Route path='/' element={<Dashboard />} />
         <Route path='/login' element={<Login />} />
+        <Route path='/register' element={<Register />} />
         <Route path='/all-cars' element={<AllCars />} />
         <Route path='/car/:id' element={<CarDetails />} />
 
-        {/* PROTECTED: LOGGED IN USERS ONLY */}
+        {/* PROTECTED: LOGGED IN USERS (User, Host, Admin) */}
         <Route element={<PrivateRoute allowedRoles={['user', 'host', 'admin']} />}>
-          <Route path='/mybookings' element={<MyBookings />} />
+          {/* Note: changed path to match the navigate() in BookingConfirmation */}
+          <Route path='/my-bookings' element={<MyBookings />} />
           <Route path='/profile' element={<Profile />} />
           <Route path='/confirm-booking' element={<BookingConfirmation />} />
         </Route>
@@ -45,9 +49,6 @@ function App() {
           <Route path='/host/bookings' element={<HostBookings />} />
           <Route path='/host/edit-car/:id' element={<EditCar />} />
         </Route>
-
-        {/* PROTECTED: ADMIN ONLY */}
-        {/* <Route element={<PrivateRoute allowedRoles={['admin']} />}> ... </Route> */}
 
       </Routes>
     </Router>

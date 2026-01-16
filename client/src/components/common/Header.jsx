@@ -52,7 +52,7 @@ function Header() {
     return (
         <div className="pt-6 px-4 pb-4 sticky top-0 z-50">
 
-            <header className='app-container mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-[2rem] px-6 py-4 flex justify-between items-center shadow-lg shadow-slate-200/50 dark:shadow-black/50 border border-white/50 dark:border-slate-800 transition-all duration-300'>
+            <header className='app-container mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-4xl px-6 py-4 flex justify-between items-center shadow-lg shadow-slate-200/50 dark:shadow-black/50 border border-white/50 dark:border-slate-800 transition-all duration-300'>
 
                 {/* LOGO (Dynamic Link) */}
                 <Link to={getHomeLink()} className="flex items-center gap-2 group">
@@ -102,7 +102,7 @@ function Header() {
                             <Link to='/all-cars' className={`transition duration-300 hover:text-emerald-600 dark:hover:text-emerald-400 ${isActive('/all-cars') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                                 All Cars
                             </Link>
-                            <Link to={user ? '/mybookings' : '/login'} onClick={handleBookingsClick} className={`transition duration-300 hover:text-emerald-600 dark:hover:text-emerald-400 ${isActive('/mybookings') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <Link to={user ? '/my-bookings' : '/login'} onClick={handleBookingsClick} className={`transition duration-300 hover:text-emerald-600 dark:hover:text-emerald-400 ${isActive('/my-bookings') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
                                 My Trips
                             </Link>
                         </>
