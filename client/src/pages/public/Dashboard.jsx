@@ -105,7 +105,7 @@ function Dashboard() {
                                 value={dates.start}
                                 onChange={(e) => setDates({ ...dates, start: e.target.value })}
                                 // Removed 'dark:invert', added 'dark:[color-scheme:dark]'
-                                className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none font-sans dark:[color-scheme:dark]"
+                                className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none font-sans dark:scheme-dark"
                             />
                         </div>
 
@@ -119,7 +119,7 @@ function Dashboard() {
                                 value={dates.end}
                                 onChange={(e) => setDates({ ...dates, end: e.target.value })}
                                 // Removed 'dark:invert', added 'dark:[color-scheme:dark]'
-                                className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none font-sans dark:[color-scheme:dark]"
+                                className="w-full bg-transparent font-bold text-slate-800 dark:text-white text-lg focus:outline-none font-sans dark:scheme-dark"
                             />
                         </div>
 

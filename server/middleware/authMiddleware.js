@@ -14,12 +14,6 @@ const protect = asyncHandler(async (req, res, next) => {
             token = req.headers.authorization.split(' ')[1];
 
             // 🚨 DEBUG LOGS (Remove these later) 🚨
-            console.log("------------------------------------------------");
-            console.log("1. JWT_SECRET Exists?", !!process.env.JWT_SECRET);
-            console.log("2. Header Received:", req.headers.authorization);
-            console.log("3. Extracted Token:", token);
-            console.log("------------------------------------------------");
-
             // 2. Verify token
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 

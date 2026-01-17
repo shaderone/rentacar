@@ -11,7 +11,6 @@ const createBooking = async (bookingData, token) => {
 
 // Get user's own bookings
 const getMyBookings = async (token) => {
-    console.log('Getting my bookings with token:', token) // Debug log
     const config = { headers: { Authorization: `Bearer ${token}` } }
     const response = await axios.get(API_URL + 'my-bookings', config)
     return response.data
@@ -19,7 +18,6 @@ const getMyBookings = async (token) => {
 
 // Get host's received requests
 const getHostBookings = async (token) => {
-    console.log('Getting host bookings with token:', token) // Debug log
     const config = { headers: { Authorization: `Bearer ${token}` } }
     const response = await axios.get(API_URL + 'host-requests', config)
     return response.data

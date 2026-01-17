@@ -12,15 +12,14 @@ function MyBookings() {
     const { bookings, isLoading, isError, message } = useSelector((state) => state.bookings)
     const { user } = useSelector((state) => state.auth)
 
-    console.log("User in MyBookings:", user) // Debug log
-    console.log("Bookings in MyBookings:", bookings) // Debug log
+
 
     // --- LOCAL STATE ---
     const [activeTab, setActiveTab] = useState('All')
 
     // --- EFFECT ---
     useEffect(() => {
-        if (isError) console.log("error fetching bookings:", message)
+        if (isError) console.log(message)
         if (!user) navigate('/login')
 
         dispatch(getMyBookings())
@@ -84,7 +83,7 @@ function MyBookings() {
     }
 
     return (
-        console.log(bookings) ||
+        //console.log(bookings) ||
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pt-10 pb-20 transition-colors duration-300">
 
             <div className="app-container mx-auto px-4">

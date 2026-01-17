@@ -18,13 +18,11 @@ function HostDashboard() {
     // Get the user's cars for the widget
     const { cars: myFleet, isLoading: carsLoading } = useSelector((state) => state.cars) || { cars: [] }
 
-    console.log('My Fleet:', myFleet), // Debugging line
-
-        // --- FETCH DATA ON LOAD ---
-        useEffect(() => {
-            dispatch(getHostBookings())
-            dispatch(getMyCars()) // Fetch the host's specific cars
-        }, [dispatch])
+    // --- FETCH DATA ON LOAD ---
+    useEffect(() => {
+        dispatch(getHostBookings())
+        dispatch(getMyCars()) // Fetch the host's specific cars
+    }, [dispatch])
 
     // --- CALCULATE DYNAMIC STATS ---
     // 1. Total Earnings (Sum of all 'Completed' trips)

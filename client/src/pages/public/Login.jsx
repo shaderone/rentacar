@@ -26,7 +26,7 @@ function Login() {
         }
 
         if (isSuccess || user) {
-            console.log(user.role)
+            console.log("role: " + user.role)
             if (user.role === 'host') {
                 navigate('/host/dashboard')
             } else if (user.role === 'admin') {

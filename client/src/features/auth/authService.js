@@ -5,8 +5,6 @@ import axios from "axios";
 const API_URL = import.meta.env.VITE_API_URL + "/auth/";
 
 const registerUser = async (userData) => {
-    // console.log("API_URL:", API_URL);
-
     // make a post request to /auth/register
     const res = await axios.post(API_URL + "register", userData);
 
@@ -24,7 +22,7 @@ const loginUser = async (userData) => {
         localStorage.setItem("user", JSON.stringify(res.data));
     }
 
-    // console.log("Login response data:", res.data); // Debug log 
+    // "Login response data:", res.data); // Debug log 
     return res.data;
 }
 
