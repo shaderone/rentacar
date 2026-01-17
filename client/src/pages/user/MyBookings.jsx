@@ -12,12 +12,15 @@ function MyBookings() {
     const { bookings, isLoading, isError, message } = useSelector((state) => state.bookings)
     const { user } = useSelector((state) => state.auth)
 
+    console.log("User in MyBookings:", user) // Debug log
+    console.log("Bookings in MyBookings:", bookings) // Debug log
+
     // --- LOCAL STATE ---
     const [activeTab, setActiveTab] = useState('All')
 
     // --- EFFECT ---
     useEffect(() => {
-        if (isError) console.log(message)
+        if (isError) console.log("error fetching bookings:", message)
         if (!user) navigate('/login')
 
         dispatch(getMyBookings())

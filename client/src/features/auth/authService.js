@@ -23,6 +23,8 @@ const loginUser = async (userData) => {
     if (res.data) {
         localStorage.setItem("user", JSON.stringify(res.data));
     }
+
+    // console.log("Login response data:", res.data); // Debug log 
     return res.data;
 }
 

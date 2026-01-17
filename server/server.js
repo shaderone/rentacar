@@ -22,10 +22,12 @@ connectDB();
 app.use(express.json()); // Allows server to accept JSON data
 app.use(cookieParser());
 app.use(cors({
-    origin: process.env.FRONTEND_URL, // Only allow our React app to talk to us
+    origin: [
+        "https://rentacar-tan.vercel.app",
+        process.env.FRONTEND_URL, "https://localhost:3000"], // Only allow our React app to talk to us
     credentials: true, // allow cookies to be sent or in simple terms : allow cross-site Access-Control requests to include cookies.
     // this is needed if we want to work with sessions and cookies in our api.
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
 }));
 

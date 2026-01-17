@@ -62,7 +62,7 @@ export const login = createAsyncThunk(
 export const logout = createAsyncThunk(
     "auth/logout",
     async () => {
-        await authService.logoutUser();
+        authService.logoutUser();
     }
 )
 
