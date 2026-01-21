@@ -1,6 +1,6 @@
 # 1. Use an Official Node Runtime as a parent image
 # We use 'alpine' because it is tiny (saves ~800MB vs standard node image)
-FROM node:18-alpine
+FROM node:20-alpine
 
 # 2. Set the working directory inside the container
 WORKDIR /app
