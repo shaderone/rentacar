@@ -1,0 +1,13 @@
+From node:18
+# Set working directory or in other words this is where the app will live inside the container
+WORKDIR /app 
+# Copy package files
+COPY package*.json ./ 
+# Install dependencies 
+RUN npm install 
+# copy all the file from the current directory which is the root of the project (means /client along with /src, /public, etc) to the working directory of the container which is /app
+COPY . . 
+# Expose port 5173 
+EXPOSE 5173 
+# Command to run the app
+CMD ["npm", "start"]

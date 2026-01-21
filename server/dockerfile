@@ -1,0 +1,24 @@
+# 1. Use an Official Node Runtime as a parent image
+# We use 'alpine' because it is tiny (saves ~800MB vs standard node image)
+FROM node:18-alpine
+
+# 2. Set the working directory inside the container
+WORKDIR /app
+
+# 3. Copy package.json and package-lock.json FIRST
+# This allows Docker to use "Layer Caching"
+# If package.json hasn't changed, Docker skips 'npm install' (Fast builds!)
+COPY package*.json ./
+
+# 4. Install dependencies
+# --production flag skips devDependencies (like jest/supertest) to save space
+RUN npm install --production
+
+# 5. Copy the rest of the application code
+COPY . .
+
+# 6. Expose the port the app runs on
+EXPOSE 5000
+
+# 7. Define the command to run the app
+CMD ["node", "server.js"]

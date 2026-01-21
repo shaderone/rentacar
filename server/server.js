@@ -45,4 +45,9 @@ app.use(errorHandler); // custom error handling middleware
 
 // 5. Start the Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// Only start the server if this file is run directly (not imported by tests). in simple terms : this check prevents the server from starting during testing.
+if (require.main === module) {
+    app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+}
+
+module.exports = { app };
