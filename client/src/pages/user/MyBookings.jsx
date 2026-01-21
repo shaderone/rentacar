@@ -70,8 +70,7 @@ function MyBookings() {
     }
 
     const handlePayment = (id) => {
-        // In a real app, this is where Stripe/Razorpay logic goes.
-        // For this project, we simulate an instant successful payment.
+        // Stripe/Razorpay logic goes.
         if (window.confirm("Proceed to payment simulation?")) {
             dispatch(updateBookingStatus({ id, status: 'Confirmed' }))
             alert("Payment Successful! Trip Confirmed.")

@@ -11,6 +11,12 @@ RUN npm install
 
 # Copy source code and build the React app
 COPY . .
+
+# 1. Accept the argument from Docker Compose
+ARG VITE_API_URL
+# 2. Make it available to the build process
+ENV VITE_API_URL=$VITE_API_URL
+
 RUN npm run build
 
 # -----------------------------------------------------------------------------

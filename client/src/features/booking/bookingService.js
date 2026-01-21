@@ -36,7 +36,6 @@ const updateBookingStatus = async (bookingId, status, token) => {
     return response.data
 }
 
-// ✅ THE FIXED CODE
 const cancelBooking = async (bookingId, token) => {
     // 1. Define the config with the token
     const config = {
