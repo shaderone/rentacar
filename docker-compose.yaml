@@ -1,7 +1,8 @@
-version: "3.8"
-
 services:
-  # 1. The Backend API
+  # -------------------------------------------------------
+  # 1. APPLICATION LAYER
+  # -------------------------------------------------------
+
   backend:
     build: ./server
     container_name: rentacar_backend
@@ -12,22 +13,92 @@ services:
     networks:
       - rentacar-network
 
-  # 2. The Frontend Interface
   frontend:
     build:
       context: ./client
-      # We pass the API URL so Vite can bake it into the HTML
       args:
         - VITE_API_URL=${VITE_API_URL}
     container_name: rentacar_frontend
     ports:
-      # AWS Port 80 -> Nginx Port 80
       - "80:80"
     depends_on:
       - backend
     networks:
       - rentacar-network
 
+  # -------------------------------------------------------
+  # 2. MONITORING LAYER
+  # -------------------------------------------------------
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - rentacar-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    networks:
+      - rentacar-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - rentacar-network
+
+  sentinel:
+    build: ./sentinel
+    container_name: sentinel
+    volumes:
+      - ./sentinel:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - rentacar-network
+    depends_on:
+      - prometheus
+
+# -------------------------------------------------------
+# 3. NETWORKS & VOLUMES
+# -------------------------------------------------------
+
 networks:
   rentacar-network:
     driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
