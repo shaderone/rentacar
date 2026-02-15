@@ -17,9 +17,6 @@ PROMETHEUS_URL = "http://prometheus:9090"
 OPENROUTER_API_KEY = "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"
 MODEL_NAME = "google/gemini-2.0-flash-exp:free" 
 
-# 🐳 DOCKER CONFIG
-TARGET_CONTAINER = "node_exporter" 
-
 # 📂 FILE PATHS
 DATASET_FILE = "sentinel_dataset.csv"
 INCIDENT_LOG = "incident_history.json"
@@ -28,9 +25,9 @@ INCIDENT_LOG = "incident_history.json"
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("Sentinel")
 
-print(f"🛡️ AIOps SENTINEL v2.0: STARTING...")
+print(f"🛡️ AIOps SENTINEL v3.0 [DIAGNOSTIC MODE]: STARTING...")
 
-# 1. Initialize Docker
+# 1. Initialize Docker (For log gathering only)
 try:
     docker_client = docker.from_env()
     logger.info("✅ Docker Socket Connected.")
@@ -43,24 +40,21 @@ if not os.path.exists(DATASET_FILE):
     with open(DATASET_FILE, mode='w', newline='') as file:
         csv.writer(file).writerow(["timestamp", "cpu_load", "label"])
 
-def log_incident(timestamp, load, action, ai_insight):
-    """Documentation: Saves the fix details to a JSON file for the Viva report."""
+def log_incident(timestamp, load, ai_insight):
+    """Saves the diagnostic details for project documentation/viva."""
     entry = {
         "timestamp": timestamp,
         "trigger_load": load,
-        "action_taken": action,
+        "status": "REPORTED_ONLY",
         "ai_analysis": ai_insight
     }
-    
     data = []
     if os.path.exists(INCIDENT_LOG):
         try:
             with open(INCIDENT_LOG, 'r') as f:
                 data = json.load(f)
         except: pass 
-    
     data.append(entry)
-    
     with open(INCIDENT_LOG, 'w') as f:
         json.dump(data, f, indent=4)
 
@@ -72,16 +66,21 @@ def send_telegram(message):
     except Exception as e:
         logger.error(f"Telegram Failed: {e}")
 
-def get_ai_analysis(cpu_load):
-    """Resilient AI Analysis that won't crash the script."""
-    if "PASTE" in OPENROUTER_API_KEY: return "⚠️ AI Key Config Missing."
-    
+def get_ai_diagnostic(cpu_load):
+    """Consults Gemini to provide root cause and bash commands."""
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "http://rentacar-sentinel", # OpenRouter often requires this
+        "HTTP-Referer": "http://rentacar-sentinel",
         "Content-Type": "application/json"
     }
-    prompt = f"Server CPU is at {cpu_load}%. This is an anomaly. Diagnose potential causes and recommend a fix. Keep it under 20 words."
+    
+    # Updated Prompt for 'Diagnostic' Decision
+    prompt = (
+        f"Alert: Server CPU is at {cpu_load}%. "
+        "1. Summarize the likely cause in one sentence. "
+        "2. Provide exactly 3 specific bash commands for the user to troubleshoot or fix this. "
+        "Be concise and format for Telegram Markdown."
+    )
     
     payload = {
         "model": MODEL_NAME,
@@ -91,26 +90,10 @@ def get_ai_analysis(cpu_load):
     try:
         response = requests.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=10)
         if response.status_code == 200:
-            data = response.json()
-            if 'choices' in data and len(data['choices']) > 0:
-                return data['choices'][0]['message']['content']
-            else:
-                return "⚠️ AI Response Empty (Provider Busy)"
-        else:
-            return f"⚠️ AI Error {response.status_code}"
+            return response.json()['choices'][0]['message']['content']
+        return f"⚠️ AI Error {response.status_code}"
     except Exception as e:
         return f"⚠️ AI Connection Failed: {str(e)}"
-
-def remediate_anomaly(cpu_load):
-    """Self-Healing: Restarts container and returns report."""
-    if not docker_client: return "❌ Docker Client Unavailable"
-    
-    try:
-        container = docker_client.containers.get(TARGET_CONTAINER)
-        container.restart()
-        return f"✅ SUCCESS: Restarted '{TARGET_CONTAINER}'."
-    except Exception as e:
-        return f"❌ HEALING FAILED: {str(e)}"
 
 def get_cpu_load():
     try:
@@ -121,12 +104,11 @@ def get_cpu_load():
     except:
         return 0.0
 
-# --- MAIN LOOP ---
+# --- INITIAL TRAINING ---
 TRAIN_POINTS = 20
 logger.info(f"🎓 Learning Baseline ({TRAIN_POINTS} points)...")
 training_data = []
 
-# Initial Training Phase
 for i in range(TRAIN_POINTS):
     load = get_cpu_load()
     training_data.append([load])
@@ -135,47 +117,39 @@ for i in range(TRAIN_POINTS):
 model = IsolationForest(contamination=0.05, random_state=42)
 model.fit(training_data)
 logger.info("✅ Model Trained. Sentinel Active.")
-send_telegram("🛡️ **Sentinel v2.0 Online**\nAIOps Pipeline: Active")
+send_telegram("🛡️ **Sentinel v3.0 Online**\nMode: AI-Assisted Diagnostics\nPipeline: Active")
 
+# --- MAIN LOOP ---
 while True:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     current_load = get_cpu_load()
     
-    # 1. DATA RECORDING
-    label = 1 if current_load > 50.0 else 0
-    with open(DATASET_FILE, mode='a', newline='') as file:
-        csv.writer(file).writerow([timestamp, current_load, label])
-
-    # 2. ANOMALY DETECTION
-    # Predict returns -1 for outlier
+    # 1. Prediction using Isolation Forest
     prediction = model.predict([[current_load]])[0]
-    
-    # Logic: Must be statistically weird (-1) AND historically high (>15%)
     is_anomaly = (prediction == -1) and (current_load > 15.0)
     
-    # Fail-safe: Always trigger if over 60%
+    # Fail-safe High Load trigger
     if current_load > 60.0: is_anomaly = True 
 
     if is_anomaly:
         logger.warning(f"🚨 ANOMALY: {current_load:.2f}%")
         
-        # 3. AI INSIGHTS
-        insight = get_ai_analysis(current_load)
+        # 2. Get AI Diagnostic Insight
+        insight = get_ai_diagnostic(current_load)
         
-        # 4. SELF-HEALING ACTION
-        fix_report = remediate_anomaly(current_load)
-        
-        # 5. NOTIFICATION & DOCUMENTATION
+        # 3. Formulate Message (NO AUTO-HEALING HERE)
         alert_msg = (
-            f"🚨 **ANOMALY DETECTED**\n"
-            f"Cpu Load: {current_load:.2f}%\n\n"
-            f"🧠 **AI Insight:**\n{insight}\n\n"
-            f"🛠️ **Self-Healing Action:**\n{fix_report}"
+            f"🚨 **SYSTEM ANOMALY DETECTED**\n"
+            f"Current CPU Load: `{current_load:.2f}%`\n\n"
+            f"🧠 **AI Diagnostic Insight:**\n{insight}\n\n"
+            f"📢 *Note: Auto-fix is disabled. Please run the suggested commands manually.*"
         )
+        
+        # 4. Report and Log
         send_telegram(alert_msg)
-        log_incident(timestamp, current_load, fix_report, insight)
+        log_incident(timestamp, current_load, insight)
         
-        # Pause to let system stabilize
-        time.sleep(30)
+        # Wait longer to avoid spamming alerts during an ongoing issue
+        time.sleep(300) 
         
-    time.sleep(3)
+    time.sleep(5)
