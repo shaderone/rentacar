@@ -81,9 +81,13 @@ services:
   sentinel:
     build: ./sentinel
     container_name: sentinel
+    # Auto-restart ensures it survives crashes/reboots (Basic Persistence)
+    restart: unless-stopped
     volumes:
       - ./sentinel:/app
       - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
     networks:
