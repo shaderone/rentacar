@@ -13,11 +13,11 @@ TELEGRAM_BOT_TOKEN = "8279244361:AAFbe9DewVIRIhpMF0psT_e0sM-F9AbwqZU"
 TELEGRAM_CHAT_ID = "1723374968"
 PROMETHEUS_URL = "http://prometheus:9090"
 
-# 🔑 AI CONFIG (OpenRouter)
+# AI CONFIG (OpenRouter)
 OPENROUTER_API_KEY = "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"
 MODEL_NAME = "google/gemini-2.0-flash-exp:free" 
 
-# 📂 FILE PATHS
+# FILE PATHS
 DATASET_FILE = "sentinel_dataset.csv"
 INCIDENT_LOG = "incident_history.json"
 
