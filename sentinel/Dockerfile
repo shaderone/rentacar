@@ -1,8 +1,16 @@
-FROM python:3.9-slim
+FROM python:3.11-slim
+
 WORKDIR /app
 
-# We explicitly add 'docker' to the install list here vvv
-RUN pip install --no-cache-dir requests scikit-learn numpy docker groq
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY sentinel.py .
-CMD ["python", "-u", "sentinel.py"]
+# Copy our code and HTML dashboard into the container
+COPY . .
+
+# Expose the web port
+EXPOSE 8000
+
+# Start the FastAPI server (not just python sentinel.py)
+CMD ["uvicorn", "sentinel:app", "--host", "0.0.0.0", "--port", "8000"]

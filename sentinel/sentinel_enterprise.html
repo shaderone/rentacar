@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel AIOps | Mission Control</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* Custom scrollbar for the AI terminal to make it look like a real console */
+        .terminal-scroll::-webkit-scrollbar { width: 8px; }
+        .terminal-scroll::-webkit-scrollbar-track { background: #0f172a; }
+        .terminal-scroll::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
+        
+        /* Pulse animation for the red alert state when an anomaly is detected */
+        @keyframes alertPulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        /* Applied via JavaScript when system is under attack */
+        .alert-mode { animation: alertPulse 2s infinite; border-color: #ef4444 !important; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-50 h-screen flex flex-col font-sans">
+
+    <nav class="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <div id="status-dot" class="w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></div>
+            <h1 class="text-xl font-bold tracking-wider text-slate-200">SENTINEL <span class="text-blue-500">AIOps</span></h1>
+        </div>
+        <div class="text-sm font-mono text-slate-400">
+            System Status: <span id="health-score" class="text-emerald-500 font-bold text-lg">100%</span>
+        </div>
+    </nav>
+
+    <main class="flex-grow p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <div class="col-span-1 lg:col-span-2 space-y-6">
+            
+            <div id="graph-card" class="bg-slate-900 rounded-xl border border-slate-800 p-5 transition-all duration-300">
+                <h2 class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-4">Live CPU Telemetry</h2>
+                <div class="h-64 w-full">
+                    <canvas id="cpuChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+                <h2 class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-4">Managed Workloads (Docker)</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="text-slate-400 border-b border-slate-800">
+                            <tr>
+                                <th class="pb-3 font-medium">Container ID</th>
+                                <th class="pb-3 font-medium">Name</th>
+                                <th class="pb-3 font-medium">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="process-list" class="text-slate-300 font-mono">
+                            <tr><td colspan="3" class="py-4 text-center text-slate-600">Loading workloads...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            
+            <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+                <h2 class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-4">Command Center</h2>
+                <p class="text-xs text-slate-500 mb-4">Manual overrides for testing the anomaly loop and remediation.</p>
+                
+                <button id="attack-toggle-btn" onclick="toggleAttack()" class="w-full bg-slate-800 hover:bg-red-900/40 text-red-500 border border-red-500/50 rounded-lg py-3 font-bold transition-colors flex justify-center items-center shadow-lg mb-4">
+                    🔥 Start Attack
+                </button>
+
+                <button id="fix-btn" onclick="executeRemediation()" class="hidden w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-3 font-bold tracking-wide shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all">
+                    ⚡ Execute AI Fix (Remediate)
+                </button>
+            </div>
+
+            <div id="ai-card" class="bg-[#0a0f1c] rounded-xl border border-slate-800 p-5 h-[350px] flex flex-col transition-all duration-300">
+                <h2 class="text-sm uppercase tracking-widest text-blue-500 font-semibold mb-4 flex items-center">
+                    <span class="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
+                    AI War Room Log
+                </h2>
+                <div id="terminal-output" class="text-xs font-mono text-slate-300 flex-grow overflow-y-auto terminal-scroll whitespace-pre-wrap leading-relaxed">
+> System Initialized.
+> Connected to Sentinel Core.
+> Awaiting telemetry...
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Set this to the URL of your FastAPI backend
+        const API_BASE = window.location.origin;
+        
+        // --- 1. INITIALIZE CHART.JS GRAPH ---
+        const ctx = document.getElementById('cpuChart').getContext('2d');
+        const cpuChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'CPU Usage (%)',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { min: 0, max: 100, grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                },
+                plugins: { legend: { display: false } },
+                animation: { duration: 0 }
+            }
+        });
+
+        // --- 2. TERMINAL LOGGING HELPER ---
+        function logToTerminal(message, type="info") {
+            const terminal = document.getElementById('terminal-output');
+            const time = new Date().toLocaleTimeString();
+            let color = "text-slate-300";
+            
+            if(type === "error") color = "text-red-400";
+            if(type === "success") color = "text-emerald-400";
+            if(type === "ai") color = "text-blue-400";
+            
+            terminal.innerHTML += `\n<span class="text-slate-500">[${time}]</span> <span class="${color}">> ${message}</span>`;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // --- 3. CORE METRICS LOOP (RUNS EVERY 1.5 SECONDS) ---
+        async function fetchMetrics() {
+            try {
+                const response = await fetch(`${API_BASE}/metrics`);
+                const data = await response.json();
+
+                document.getElementById('health-score').innerText = `${data.health_score}%`;
+                
+                const timeNow = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                if (cpuChart.data.labels.length > 20) {
+                    cpuChart.data.labels.shift();
+                    cpuChart.data.datasets[0].data.shift();
+                }
+                cpuChart.data.labels.push(timeNow);
+                cpuChart.data.datasets[0].data.push(data.cpu);
+                cpuChart.update(); // The fixed update command
+
+                const graphCard = document.getElementById('graph-card');
+                const aiCard = document.getElementById('ai-card');
+                const statusDot = document.getElementById('status-dot');
+                const fixBtn = document.getElementById('fix-btn');
+
+                if (data.is_anomaly) {
+                    graphCard.classList.add('alert-mode');
+                    aiCard.classList.add('border-red-500');
+                    statusDot.classList.replace('bg-emerald-500', 'bg-red-500');
+                    cpuChart.data.datasets[0].borderColor = '#ef4444'; 
+                    cpuChart.data.datasets[0].backgroundColor = 'rgba(239, 68, 68, 0.2)';
+
+                    // UNHIDE THE REMEDIATE BUTTON
+                    fixBtn.classList.remove('hidden');
+
+                    if(data.current_diagnosis && !document.getElementById('terminal-output').innerHTML.includes(data.current_diagnosis.substring(0,20))) {
+                        logToTerminal("ISOLATION FOREST: Anomaly Detected. Routing logs to Llama 3...", "error");
+                        setTimeout(() => {
+                            logToTerminal(data.current_diagnosis, "ai");
+                        }, 1000);
+                    }
+                } else {
+                    graphCard.classList.remove('alert-mode');
+                    aiCard.classList.remove('border-red-500');
+                    statusDot.classList.replace('bg-red-500', 'bg-emerald-500');
+                    cpuChart.data.datasets[0].borderColor = '#3b82f6';
+                    cpuChart.data.datasets[0].backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                    
+                    // HIDE THE BUTTON WHEN NORMAL
+                    fixBtn.classList.add('hidden');
+                }
+
+            } catch (error) {
+                console.error("Failed to fetch metrics", error);
+            }
+        }
+
+        // --- 4. DOCKER PROCESSES LOOP (RUNS EVERY 5 SECONDS) ---
+        async function fetchProcesses() {
+            try {
+                const response = await fetch(`${API_BASE}/processes`);
+                const processes = await response.json();
+                
+                let html = '';
+                processes.forEach(p => {
+                    let statusColor = p.status.includes('Up') || p.status === 'running' ? 'text-emerald-400' : 'text-red-400';
+                    html += `
+                        <tr class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                            <td class="py-3 text-slate-400">${p.id}</td>
+                            <td class="py-3 font-medium text-slate-200">${p.name}</td>
+                            <td class="py-3 ${statusColor}">${p.status}</td>
+                        </tr>
+                    `;
+                });
+                document.getElementById('process-list').innerHTML = html;
+            } catch (error) {
+                document.getElementById('process-list').innerHTML = `<tr><td colspan="3" class="py-4 text-center text-red-500">Failed to load Docker socket data</td></tr>`;
+            }
+        }
+
+        // --- 5. CONTROL PANEL FUNCTIONS ---
+        let isAttacking = false;
+
+        async function toggleAttack() {
+            const btn = document.getElementById('attack-toggle-btn');
+            
+            if (!isAttacking) {
+                isAttacking = true;
+                btn.innerHTML = '🛑 Stop Attack';
+                btn.classList.replace('text-red-500', 'text-slate-400');
+                btn.classList.replace('hover:bg-red-900/40', 'hover:bg-slate-700');
+                btn.classList.replace('border-red-500/50', 'border-slate-600');
+                
+                logToTerminal("Injecting chaos sequence into target workload...", "error");
+                await fetch(`${API_BASE}/simulate_attack`, { method: 'POST' });
+            } else {
+                isAttacking = false;
+                btn.innerHTML = '🔥 Start Attack';
+                btn.classList.replace('text-slate-400', 'text-red-500');
+                btn.classList.replace('hover:bg-slate-700', 'hover:bg-red-900/40');
+                btn.classList.replace('border-slate-600', 'border-red-500/50');
+                
+                logToTerminal("Manual override: Halting attack simulation...", "info");
+                await fetch(`${API_BASE}/remediate/manual-override`, { method: 'POST' });
+                
+                // --- ADDED: INSTANT UI RESET ---
+                document.getElementById('fix-btn').classList.add('hidden');
+                document.getElementById('graph-card').classList.remove('alert-mode');
+                document.getElementById('ai-card').classList.remove('border-red-500');
+                document.getElementById('status-dot').classList.replace('bg-red-500', 'bg-emerald-500');
+                
+                cpuChart.data.datasets[0].borderColor = '#3b82f6';
+                cpuChart.data.datasets[0].backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                cpuChart.update();
+            }
+        }
+
+        // --- THE MISSING REMEDIATION FUNCTION! ---
+        async function executeRemediation() {
+            logToTerminal("Executing AI Remediation protocol...", "info");
+            
+            // Smart target detection: Find the backend container name dynamically
+            const rows = document.querySelectorAll('#process-list tr');
+            let targetName = 'rentacar-backend'; // Fallback
+            rows.forEach(row => {
+                const name = row.cells[1]?.innerText;
+                if (name && (name.includes('backend') || name.includes('api'))) {
+                    targetName = name;
+                }
+            });
+
+            try {
+                logToTerminal(`Targeting container: ${targetName}`, "info");
+                const response = await fetch(`${API_BASE}/remediate/${targetName}`, { method: 'POST' });
+                const result = await response.json();
+                
+                if(result.status === "success") {
+                    logToTerminal(result.message, "success");
+                    logToTerminal("System returning to nominal parameters. Alert cleared.", "success");
+                    
+                    // Reset the Start Attack button
+                    isAttacking = false;
+                    const btn = document.getElementById('attack-toggle-btn');
+                    btn.innerHTML = 'Start Attack';
+                    btn.classList.replace('text-slate-400', 'text-red-500');
+                    btn.classList.replace('hover:bg-slate-700', 'hover:bg-red-900/40');
+                    btn.classList.replace('border-slate-600', 'border-red-500/50');
+                    
+                    // Hide the fix button immediately
+                    document.getElementById('fix-btn').classList.add('hidden');
+                } else {
+                    logToTerminal("Remediation failed: " + result.error, "error");
+                }
+            } catch (error) {
+                logToTerminal("API Connection lost during remediation.", "error");
+            }
+        }
+
+        // --- 6. START BACKGROUND LOOPS ---
+        setInterval(fetchMetrics, 1500);
+        setInterval(fetchProcesses, 5000);
+        fetchMetrics();
+        fetchProcesses();
+
+    </script>
+</body>
+</html>
