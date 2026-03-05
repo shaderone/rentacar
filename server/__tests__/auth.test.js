@@ -1,10 +1,10 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+// Load env variables first
+dotenv.config({ path: '../.env' });
 const { app } = require('../server'); // Importing your app
 
-// Load env variables
-dotenv.config();
 
 // Connect to DB before tests start
 beforeAll(async () => {
