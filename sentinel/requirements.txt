@@ -5,3 +5,4 @@ requests
 groq
 scikit-learn
 python-dotenv
+pydantic

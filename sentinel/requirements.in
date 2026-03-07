@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-docker
-requests
-groq
-scikit-learn
-python-dotenv
