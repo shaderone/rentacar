@@ -1,105 +1,374 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sentinel AIOps | Mission Control</title>
-    
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <style>
-        /* Custom scrollbar for the AI terminal to make it look like a real console */
-        .terminal-scroll::-webkit-scrollbar { width: 8px; }
-        .terminal-scroll::-webkit-scrollbar-track { background: #0f172a; }
-        .terminal-scroll::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
-        
-        /* Pulse animation for the red alert state when an anomaly is detected */
-        @keyframes alertPulse {
-            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        /* Custom scrollbars */
+        .terminal-scroll::-webkit-scrollbar {
+            width: 8px;
         }
-        /* Applied via JavaScript when system is under attack */
-        .alert-mode { animation: alertPulse 2s infinite; border-color: #ef4444 !important; }
+
+        .terminal-scroll::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        .terminal-scroll::-webkit-scrollbar-thumb {
+            background: #3b82f6;
+            border-radius: 4px;
+        }
+
+        /* Alert Pulse */
+        @keyframes alertPulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 15px rgba(239, 68, 68, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }
+        }
+
+        .alert-mode {
+            animation: alertPulse 2s infinite;
+            border-color: #ef4444 !important;
+        }
+
+        /* Glassmorphism */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* Chat UI */
+        .bot-message {
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9));
+            border-left: 3px solid #3b82f6;
+            border-radius: 0 12px 12px 12px;
+        }
+
+        .user-message {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border-radius: 12px 0 12px 12px;
+            color: white;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+
+        .typing-dot:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes typing {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+                opacity: 0.3;
+            }
+
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Tab Animation */
+        .tab-animate {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-50 h-screen flex flex-col font-sans">
 
-    <nav class="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center">
+<body class="bg-slate-950 text-slate-50 h-screen flex flex-col font-sans overflow-hidden">
+
+    <nav class="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shrink-0">
         <div class="flex items-center space-x-3">
             <div id="status-dot" class="w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></div>
-            <h1 class="text-xl font-bold tracking-wider text-slate-200">SENTINEL <span class="text-blue-500">AIOps</span></h1>
+            <h1 class="text-xl font-bold tracking-wider text-slate-200">SENTINEL <span
+                    class="text-blue-500">AIOps</span></h1>
         </div>
-        <div class="text-sm font-mono text-slate-400">
-            System Status: <span id="health-score" class="text-emerald-500 font-bold text-lg">100%</span>
+        <div class="flex items-center space-x-6 text-sm font-mono text-slate-400">
+            <div class="flex items-center space-x-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50">
+                <span>Pipeline:</span>
+                <div class="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]"></div>
+                <span class="text-emerald-400 font-bold tracking-wider">PASSED</span>
+            </div>
+            <div>
+                System Status: <span id="health-score" class="text-emerald-500 font-bold text-lg">100%</span>
+            </div>
         </div>
     </nav>
 
-    <main class="flex-grow p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        <div class="col-span-1 lg:col-span-2 space-y-6">
-            
-            <div id="graph-card" class="bg-slate-900 rounded-xl border border-slate-800 p-5 transition-all duration-300">
-                <h2 class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-4">Live CPU Telemetry</h2>
-                <div class="h-64 w-full">
-                    <canvas id="cpuChart"></canvas>
-                </div>
-            </div>
+    <div class="bg-slate-900 border-b border-slate-800 px-6 shrink-0 pt-2">
+        <!-- TAB NAVIGATION -->
+        <nav class="flex gap-6 border-b border-slate-800/60">
+            <button onclick="switchTab('dashboard')" id="btn-dashboard"
+                class="tab-btn text-blue-400 border-b-2 border-blue-500 pb-3 px-1 font-medium text-sm transition-colors">
+                Cluster Overview
+            </button>
+            <button onclick="switchTab('opsbot')" id="btn-opsbot"
+                class="tab-btn text-slate-400 border-b-2 border-transparent hover:text-slate-300 pb-3 px-1 font-medium text-sm flex items-center gap-2 transition-colors">
+                OpsBot Deep Dive <span
+                    class="bg-blue-600/30 text-blue-400 py-0.5 px-2 rounded-full text-[10px] animate-pulse">Llama-3</span>
+            </button>
 
-            <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
-                <h2 class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-4">Managed Workloads (Docker)</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead class="text-slate-400 border-b border-slate-800">
-                            <tr>
-                                <th class="pb-3 font-medium">Container ID</th>
-                                <th class="pb-3 font-medium">Name</th>
-                                <th class="pb-3 font-medium">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="process-list" class="text-slate-300 font-mono">
-                            <tr><td colspan="3" class="py-4 text-center text-slate-600">Loading workloads...</td></tr>
-                        </tbody>
-                    </table>
+            <!-- Global AI Actions aligned to the right -->
+            <div class="ml-auto flex items-center gap-4 pb-2">
+                <select id="attack-target"
+                    class="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-blue-500">
+                    <option value="Select Target Workload...">Select Target Workload...</option>
+                </select>
+                <button onclick="toggleAttack()" id="attack-btn"
+                    class="bg-red-900/40 hover:bg-red-800/60 text-red-400 border border-red-800/50 px-4 py-1.5 rounded text-xs font-semibold tracking-wider uppercase transition-all shadow-sm">
+                    Start Chaos Attack
+                </button>
+                <button onclick="executeRemediation()" id="remediate-btn"
+                    class="bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-400 border border-emerald-800/50 px-4 py-1.5 rounded text-xs font-semibold tracking-wider uppercase transition-all shadow-sm opacity-50 cursor-not-allowed"
+                    disabled>
+                    Execute AI Fix
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <main class="flex-grow overflow-hidden p-4 lg:p-6 relative flex flex-col">
+
+        <!-- DASHBOARD TAB -->
+        <div id="tab-dashboard" class="tab-content tab-animate w-full h-full flex flex-col">
+            <div class="max-w-8xl w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 h-full min-h-0">
+                <!-- Main Telemetry Col -->
+                <div class="lg:col-span-2 flex flex-col gap-6 h-full min-h-0">
+
+                    <!-- CPU Graph -->
+                    <div
+                        class="bg-slate-900 rounded-xl border border-slate-800 p-5 shadow-md shrink-0 h-64 lg:h-80 flex flex-col relative overflow-hidden group">
+                        <div
+                            class="absolute inset-0 bg-gradient-to-b from-blue-900/5 to-transparent pointer-events-none">
+                        </div>
+                        <h2 class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-2 relative z-10">
+                            Cluster Telemetry
+                        </h2>
+                        <div class="relative flex-grow w-full z-10 mt-2">
+                            <canvas id="cpuChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Workloads Table below chart -->
+                    <div
+                        class="bg-slate-900 rounded-xl border border-slate-800 p-5 shadow-md flex-grow flex flex-col min-h-0 overflow-hidden">
+                        <h2 class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-4 shrink-0">Managed
+                            Workloads (Docker)</h2>
+                        <div class="overflow-y-auto flex-grow min-h-0 text-left w-full pr-2">
+                            <table class="w-full text-left text-sm">
+                                <thead class="text-slate-400 border-b border-slate-800">
+                                    <tr>
+                                        <th class="pb-3 font-medium">Container ID</th>
+                                        <th class="pb-3 font-medium">Name</th>
+                                        <th class="pb-3 font-medium">Status</th>
+                                        <th class="pb-3 font-medium text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="process-list" class="text-slate-300 font-mono">
+                                    <tr>
+                                        <td colspan="4" class="py-4 text-center text-slate-600">Loading workloads...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar: Infrastructure Logs -->
+                <div class="flex flex-col gap-6 h-full min-h-0">
+                    <div id="ai-card"
+                        class="bg-[#0a0f1c] rounded-xl border border-slate-800 p-5 flex flex-col transition-all duration-300 shadow-md h-full overflow-hidden">
+                        <h2
+                            class="text-sm uppercase tracking-widest text-blue-500 font-semibold mb-3 flex items-center">
+                            <span class="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
+                            Infrastructure Logs
+                        </h2>
+                        <div id="terminal-output"
+                            class="text-xs font-mono text-slate-300 flex-grow overflow-y-auto min-h-0 terminal-scroll whitespace-pre-wrap leading-relaxed">
+                            > System Initialized.
+                            > Connected to Sentinel Core.
+                            > Awaiting telemetry...
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="space-y-6">
-            
-            <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
-                <h2 class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-4">Command Center</h2>
-                <p class="text-xs text-slate-500 mb-4">Manual overrides for testing the anomaly loop and remediation.</p>
-                
-                <button id="attack-toggle-btn" onclick="toggleAttack()" class="w-full bg-slate-800 hover:bg-red-900/40 text-red-500 border border-red-500/50 rounded-lg py-3 font-bold transition-colors flex justify-center items-center shadow-lg mb-4">
-                    🔥 Start Attack
-                </button>
+        <!-- OPSBOT DEEP DIVE TAB -->
+        <div id="tab-opsbot" class="tab-content hidden tab-animate w-full h-full flex flex-col">
+            <div class="max-w-8xl w-full mx-auto h-full min-h-0">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full min-h-0">
 
-                <button id="fix-btn" onclick="executeRemediation()" class="hidden w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-3 font-bold tracking-wide shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all">
-                    ⚡ Execute AI Fix (Remediate)
-                </button>
-            </div>
+                    <!-- Live Tail Box -->
+                    <div
+                        class="bg-slate-900 rounded-xl border border-slate-800 p-5 shadow-md flex flex-col h-full min-h-0 overflow-hidden">
+                        <div class="flex justify-between items-center mb-4 pb-4 border-b border-slate-800">
+                            <div>
+                                <h2
+                                    class="text-sm uppercase tracking-widest text-slate-400 font-semibold flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    Live Container Tail
+                                </h2>
+                                <p class="text-[10px] text-slate-500 mt-1">Select a container from the top navigation
+                                    bar to view logs</p>
+                            </div>
+                            <span class="relative flex h-3 w-3">
+                                <span
+                                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            </span>
+                        </div>
+                        <div id="live-tail"
+                            class="flex-grow p-4 overflow-y-auto min-h-0 terminal-scroll text-[11px] font-mono text-slate-400 bg-[#060a12]/70 relative">
+                            <div id="log-content" class="whitespace-pre-wrap break-all leading-tight">Waiting for target
+                                selection...</div>
+                        </div>
+                    </div>
 
-            <div id="ai-card" class="bg-[#0a0f1c] rounded-xl border border-slate-800 p-5 h-[350px] flex flex-col transition-all duration-300">
-                <h2 class="text-sm uppercase tracking-widest text-blue-500 font-semibold mb-4 flex items-center">
-                    <span class="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></span>
-                    AI War Room Log
-                </h2>
-                <div id="terminal-output" class="text-xs font-mono text-slate-300 flex-grow overflow-y-auto terminal-scroll whitespace-pre-wrap leading-relaxed">
-> System Initialized.
-> Connected to Sentinel Core.
-> Awaiting telemetry...
+                    <div
+                        class="glass-panel rounded-xl flex flex-col h-full overflow-hidden min-h-0 shadow-[0_0_30px_rgba(59,130,246,0.15)]">
+                        <div
+                            class="bg-gradient-to-r from-slate-900/90 to-blue-900/20 p-3 border-b border-white/5 flex items-center justify-between backdrop-blur-md shrink-0 z-10">
+                            <div class="flex items-center space-x-3">
+                                <div class="relative">
+                                    <div
+                                        class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center p-0.5 shadow-lg shadow-blue-500/30">
+                                        <div
+                                            class="w-full h-full bg-slate-900 rounded-full flex items-center justify-center">
+                                            <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                                                <path
+                                                    d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h4zm0 8a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h4zm0 8a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h4z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 rounded-full border border-slate-900 shadow-[0_0_5px_#10b981]">
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 class="text-xs font-bold text-white tracking-wide">OpsBot (Llama-3)</h3>
+                                    <p class="text-[9px] text-emerald-400 font-mono tracking-wider">ONLINE & OBSERVING
+                                    </p>
+                                </div>
+                            </div>
+                            <button onclick="clearChat()" title="Clear History"
+                                class="text-slate-500 hover:text-red-400 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                    </path>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div id="chat-messages"
+                            class="flex-grow p-4 overflow-y-auto min-h-0 terminal-scroll text-sm space-y-4">
+                            <div class="flex items-start">
+                                <div class="bot-message p-3 text-slate-300 max-w-[85%] text-[13px] leading-relaxed">
+                                    I am OpsBot. I have real-time access to the cluster metrics and the live logs of
+                                    your selected container.<br><br>How can I help you diagnose the system today?
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-slate-900/80 border-t border-white/5 backdrop-blur-md shrink-0">
+                            <form id="chat-form" class="flex items-center space-x-2 relative"
+                                onsubmit="sendChatMessage(event)">
+                                <input type="text" id="chat-input" placeholder="Ask Llama-3 about the logs..."
+                                    class="flex-grow bg-slate-950/80 text-white text-sm rounded-lg pl-4 pr-10 py-2.5 outline-none border border-slate-700/50 focus:border-blue-500/70 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder-slate-600 shadow-inner">
+                                <button type="submit" id="send-btn"
+                                    class="absolute right-2 p-1.5 rounded-md text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <svg class="w-5 h-5 transform rotate-90" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
-
         </div>
+
     </main>
 
     <script>
-        // Set this to the URL of your FastAPI backend
         const API_BASE = window.location.origin;
-        
+
+        // --- TAB SWITCHING LOGIC ---
+        function switchTab(tabId) {
+            // Hide all contents by swapping 'block' for 'hidden'
+            document.querySelectorAll('.tab-content').forEach(el => {
+                el.classList.remove('block');
+                el.classList.add('hidden');
+            });
+
+            // Reset all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('text-blue-500', 'border-blue-500');
+                btn.classList.add('text-slate-400', 'border-transparent');
+            });
+
+            // Activate chosen content
+            const activeContent = document.getElementById(`tab-${tabId}`);
+            activeContent.classList.remove('hidden');
+            activeContent.classList.add('block');
+
+            // Activate chosen button
+            const activeBtn = document.getElementById(`btn-${tabId}`);
+            activeBtn.classList.remove('text-slate-400', 'border-transparent');
+            activeBtn.classList.add('text-blue-500', 'border-blue-500');
+
+            // Fix Chart.js rendering bug when canvas is hidden then shown
+            if (tabId === 'dashboard' && cpuChart) {
+                cpuChart.resize();
+            }
+        }
+
         // --- 1. INITIALIZE CHART.JS GRAPH ---
         const ctx = document.getElementById('cpuChart').getContext('2d');
         const cpuChart = new Chart(ctx, {
@@ -130,66 +399,68 @@
         });
 
         // --- 2. TERMINAL LOGGING HELPER ---
-        function logToTerminal(message, type="info") {
+        function logToTerminal(message, type = "info") {
             const terminal = document.getElementById('terminal-output');
             const time = new Date().toLocaleTimeString();
             let color = "text-slate-300";
-            
-            if(type === "error") color = "text-red-400";
-            if(type === "success") color = "text-emerald-400";
-            if(type === "ai") color = "text-blue-400";
-            
+
+            if (type === "error") color = "text-red-400";
+            if (type === "success") color = "text-emerald-400";
+            if (type === "ai") color = "text-blue-400";
+
             terminal.innerHTML += `\n<span class="text-slate-500">[${time}]</span> <span class="${color}">> ${message}</span>`;
             terminal.scrollTop = terminal.scrollHeight;
         }
 
-        // --- 3. CORE METRICS LOOP (RUNS EVERY 1.5 SECONDS) ---
+        // --- 3. CORE METRICS LOOP ---
         async function fetchMetrics() {
             try {
                 const response = await fetch(`${API_BASE}/metrics`);
                 const data = await response.json();
 
                 document.getElementById('health-score').innerText = `${data.health_score}%`;
-                
-                const timeNow = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+
+                const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 if (cpuChart.data.labels.length > 20) {
                     cpuChart.data.labels.shift();
                     cpuChart.data.datasets[0].data.shift();
                 }
                 cpuChart.data.labels.push(timeNow);
                 cpuChart.data.datasets[0].data.push(data.cpu);
-                cpuChart.update(); // The fixed update command
+                cpuChart.update();
 
                 const graphCard = document.getElementById('graph-card');
                 const aiCard = document.getElementById('ai-card');
                 const statusDot = document.getElementById('status-dot');
-                const fixBtn = document.getElementById('fix-btn');
+                const remediateBtn = document.getElementById('remediate-btn'); // Changed from fixBtn
 
                 if (data.is_anomaly) {
-                    graphCard.classList.add('alert-mode');
-                    aiCard.classList.add('border-red-500');
+                    // graphCard might not exist on opsbot tab, check for it
+                    if (graphCard) graphCard.classList.add('alert-mode');
+                    if (aiCard) aiCard.classList.add('border-red-500');
                     statusDot.classList.replace('bg-emerald-500', 'bg-red-500');
-                    cpuChart.data.datasets[0].borderColor = '#ef4444'; 
+                    cpuChart.data.datasets[0].borderColor = '#ef4444';
                     cpuChart.data.datasets[0].backgroundColor = 'rgba(239, 68, 68, 0.2)';
 
-                    // UNHIDE THE REMEDIATE BUTTON
-                    fixBtn.classList.remove('hidden');
+                    remediateBtn.disabled = false; // Enable remediate button
+                    remediateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
 
-                    if(data.current_diagnosis && !document.getElementById('terminal-output').innerHTML.includes(data.current_diagnosis.substring(0,20))) {
+
+                    if (data.current_diagnosis && !document.getElementById('terminal-output').innerHTML.includes(data.current_diagnosis.substring(0, 20))) {
                         logToTerminal("ISOLATION FOREST: Anomaly Detected. Routing logs to Llama 3...", "error");
                         setTimeout(() => {
                             logToTerminal(data.current_diagnosis, "ai");
                         }, 1000);
                     }
                 } else {
-                    graphCard.classList.remove('alert-mode');
-                    aiCard.classList.remove('border-red-500');
+                    if (graphCard) graphCard.classList.remove('alert-mode');
+                    if (aiCard) aiCard.classList.remove('border-red-500');
                     statusDot.classList.replace('bg-red-500', 'bg-emerald-500');
                     cpuChart.data.datasets[0].borderColor = '#3b82f6';
                     cpuChart.data.datasets[0].backgroundColor = 'rgba(59, 130, 246, 0.1)';
-                    
-                    // HIDE THE BUTTON WHEN NORMAL
-                    fixBtn.classList.add('hidden');
+
+                    remediateBtn.disabled = true; // Disable remediate button
+                    remediateBtn.classList.add('opacity-50', 'cursor-not-allowed');
                 }
 
             } catch (error) {
@@ -197,24 +468,89 @@
             }
         }
 
-        // --- 4. DOCKER PROCESSES LOOP (RUNS EVERY 5 SECONDS) ---
+        async function manageContainer(name, action, btnElement) {
+            logToTerminal(`Direct Manual Override: Initiating ${action} command on ${name}...`, "info");
+
+            // Visual feedback on the button itself!
+            const originalText = btnElement.innerText;
+            btnElement.innerText = "Working...";
+            btnElement.disabled = true;
+            btnElement.classList.add('opacity-50', 'cursor-not-allowed', 'animate-pulse');
+
+            try {
+                const response = await fetch(`${API_BASE}/container/${name}/${action}`, { method: 'POST' });
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    logToTerminal(result.message, "success");
+                    btnElement.innerText = "Success";
+                    btnElement.classList.replace('text-slate-300', 'text-emerald-400');
+                    setTimeout(fetchProcesses, 1000); // Refresh the table after a brief pause
+                } else {
+                    logToTerminal(`Error: ${result.error}`, "error");
+                    btnElement.innerText = "Error";
+                    btnElement.classList.replace('text-slate-300', 'text-red-400');
+                }
+            } catch (e) {
+                logToTerminal(`Network error while executing ${action} on ${name}.`, "error");
+                btnElement.innerText = "Failed";
+            } finally {
+                // Ensure the button stops pulsing
+                btnElement.classList.remove('animate-pulse');
+            }
+        }
+
+        // --- 4. DOCKER PROCESSES LOOP ---
         async function fetchProcesses() {
             try {
                 const response = await fetch(`${API_BASE}/processes`);
                 const processes = await response.json();
-                
+
                 let html = '';
+                const selectEl = document.getElementById('attack-target'); // Target the global dropdown
+                const wasEmpty = selectEl.options.length <= 1;
+                const currentSelection = selectEl.value;
+                let selectHtml = '<option value="Select Target Workload...">Select Target Workload...</option>';
+
                 processes.forEach(p => {
-                    let statusColor = p.status.includes('Up') || p.status === 'running' ? 'text-emerald-400' : 'text-red-400';
+                    const isRunning = p.status === 'running' || p.status.includes('Up');
+                    const statusColor = isRunning ? 'text-emerald-400' : 'text-slate-400';
+
+                    // Buttons markup
+                    let actionBtns = '';
+                    if (p.id !== '-') {
+                        if (isRunning) {
+                            actionBtns = `
+                                <button onclick="manageContainer('${p.name}', 'restart', this)" class="text-[10px] uppercase tracking-wider bg-slate-800 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 text-slate-300 px-2.5 py-1 rounded transition-colors mr-1">Restart</button>
+                                <button onclick="manageContainer('${p.name}', 'stop', this)" class="text-[10px] uppercase tracking-wider bg-slate-800 hover:bg-red-600 border border-slate-700 hover:border-red-500 text-slate-300 px-2.5 py-1 rounded transition-colors">Stop</button>
+                            `;
+                        } else {
+                            actionBtns = `
+                                <button onclick="manageContainer('${p.name}', 'start', this)" class="text-[10px] uppercase tracking-wider bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-300 px-2.5 py-1 rounded transition-colors">Start</button>
+                            `;
+                        }
+                    }
+
                     html += `
-                        <tr class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                            <td class="py-3 text-slate-400">${p.id}</td>
-                            <td class="py-3 font-medium text-slate-200">${p.name}</td>
+                        <tr class="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                            <td class="py-3">${p.id}</td>
+                            <td class="py-3 font-semibold text-slate-200">${p.name}</td>
                             <td class="py-3 ${statusColor}">${p.status}</td>
+                            <td class="py-3 text-right">${actionBtns}</td>
                         </tr>
                     `;
+                    if (p.id !== '-') {
+                        selectHtml += `<option value="${p.name}" ${p.name === currentSelection ? 'selected' : ''}>${p.name}</option>`;
+                    }
                 });
+
                 document.getElementById('process-list').innerHTML = html;
+                selectEl.innerHTML = selectHtml;
+
+                if (wasEmpty && selectHtml.includes('rentacar_frontend')) {
+                    selectEl.value = Array.from(selectEl.options).find(opt => opt.value.includes('rentacar_frontend')).value;
+                }
+
             } catch (error) {
                 document.getElementById('process-list').innerHTML = `<tr><td colspan="3" class="py-4 text-center text-red-500">Failed to load Docker socket data</td></tr>`;
             }
@@ -224,86 +560,248 @@
         let isAttacking = false;
 
         async function toggleAttack() {
-            const btn = document.getElementById('attack-toggle-btn');
-            
+            const btn = document.getElementById('attack-btn');
+            const remediateBtn = document.getElementById('remediate-btn');
+            const targetName = document.getElementById('attack-target').value; // Read from global dropdown
+            const containerQuery = targetName && targetName !== "Select Target Workload..." ? `?container=${targetName}` : "";
+
             if (!isAttacking) {
                 isAttacking = true;
                 btn.innerHTML = '🛑 Stop Attack';
-                btn.classList.replace('text-red-500', 'text-slate-400');
-                btn.classList.replace('hover:bg-red-900/40', 'hover:bg-slate-700');
-                btn.classList.replace('border-red-500/50', 'border-slate-600');
-                
-                logToTerminal("Injecting chaos sequence into target workload...", "error");
-                await fetch(`${API_BASE}/simulate_attack`, { method: 'POST' });
+                btn.classList.replace('text-red-400', 'text-slate-400');
+                btn.classList.replace('hover:bg-red-800/60', 'hover:bg-slate-700');
+                btn.classList.replace('bg-red-900/40', 'bg-slate-800');
+                btn.classList.replace('border-red-800/50', 'border-slate-600');
+
+                logToTerminal(`Injecting chaos sequence into ${targetName || 'the backend'}...`, "error");
+                await fetch(`${API_BASE}/simulate_attack${containerQuery}`, { method: 'POST' });
             } else {
                 isAttacking = false;
-                btn.innerHTML = '🔥 Start Attack';
-                btn.classList.replace('text-slate-400', 'text-red-500');
-                btn.classList.replace('hover:bg-slate-700', 'hover:bg-red-900/40');
-                btn.classList.replace('border-slate-600', 'border-red-500/50');
-                
+                btn.innerHTML = '🔥 Start Chaos Attack';
+                btn.classList.replace('text-slate-400', 'text-red-400');
+                btn.classList.replace('hover:bg-slate-700', 'hover:bg-red-800/60');
+                btn.classList.replace('bg-slate-800', 'bg-red-900/40');
+                btn.classList.replace('border-slate-600', 'border-red-800/50');
+
                 logToTerminal("Manual override: Halting attack simulation...", "info");
                 await fetch(`${API_BASE}/remediate/manual-override`, { method: 'POST' });
-                
-                // --- ADDED: INSTANT UI RESET ---
-                document.getElementById('fix-btn').classList.add('hidden');
-                document.getElementById('graph-card').classList.remove('alert-mode');
-                document.getElementById('ai-card').classList.remove('border-red-500');
-                document.getElementById('status-dot').classList.replace('bg-red-500', 'bg-emerald-500');
-                
-                cpuChart.data.datasets[0].borderColor = '#3b82f6';
-                cpuChart.data.datasets[0].backgroundColor = 'rgba(59, 130, 246, 0.1)';
-                cpuChart.update();
+
+                remediateBtn.disabled = true;
+                remediateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+                // If on dashboard, reset graph UI
+                const graphCard = document.getElementById('graph-card');
+                if (graphCard) {
+                    graphCard.classList.remove('alert-mode');
+                    document.getElementById('status-dot').classList.replace('bg-red-500', 'bg-emerald-500');
+                    cpuChart.data.datasets[0].borderColor = '#3b82f6';
+                    cpuChart.data.datasets[0].backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                    cpuChart.update();
+                }
             }
         }
 
-        // --- THE MISSING REMEDIATION FUNCTION! ---
         async function executeRemediation() {
             logToTerminal("Executing AI Remediation protocol...", "info");
-            
-            // Smart target detection: Find the backend container name dynamically
-            const rows = document.querySelectorAll('#process-list tr');
-            let targetName = 'rentacar-backend'; // Fallback
-            rows.forEach(row => {
-                const name = row.cells[1]?.innerText;
-                if (name && (name.includes('backend') || name.includes('api'))) {
-                    targetName = name;
-                }
-            });
-
             try {
-                logToTerminal(`Targeting container: ${targetName}`, "info");
-                const response = await fetch(`${API_BASE}/remediate/${targetName}`, { method: 'POST' });
+                logToTerminal("Targeting: AUTO-DETECT (AI Engine overrides)", "ai");
+                const response = await fetch(`${API_BASE}/remediate/auto`, { method: 'POST' });
                 const result = await response.json();
-                
-                if(result.status === "success") {
+
+                if (result.status === "success") {
                     logToTerminal(result.message, "success");
                     logToTerminal("System returning to nominal parameters. Alert cleared.", "success");
-                    
-                    // Reset the Start Attack button
-                    isAttacking = false;
-                    const btn = document.getElementById('attack-toggle-btn');
-                    btn.innerHTML = 'Start Attack';
-                    btn.classList.replace('text-slate-400', 'text-red-500');
-                    btn.classList.replace('hover:bg-slate-700', 'hover:bg-red-900/40');
-                    btn.classList.replace('border-slate-600', 'border-red-500/50');
-                    
-                    // Hide the fix button immediately
-                    document.getElementById('fix-btn').classList.add('hidden');
+
+                    const remediateBtn = document.getElementById('remediate-btn');
+                    remediateBtn.disabled = true;
+                    remediateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+                    if (isAttacking) {
+                        toggleAttack(); // Sync state, stops attack and resets attack-btn
+                    }
                 } else {
-                    logToTerminal("Remediation failed: " + result.error, "error");
+                    logToTerminal(`AI Remediation Error: ${result.error}`, "error");
                 }
-            } catch (error) {
-                logToTerminal("API Connection lost during remediation.", "error");
+            } catch (e) {
+                logToTerminal("Lost connection to Sentinel Core.", "error");
             }
         }
 
-        // --- 6. START BACKGROUND LOOPS ---
-        setInterval(fetchMetrics, 1500);
-        setInterval(fetchProcesses, 5000);
-        fetchMetrics();
-        fetchProcesses();
+        // --- 6. OPSBOT CHAT ENGINE & LIVE TAIL LOGIC ---
+        let chatHistory = [];
 
+        async function fetchLogs() {
+            const selectEl = document.getElementById('attack-target');
+            if (!selectEl) return;
+            const containerName = selectEl.value;
+            const tailBox = document.getElementById('live-tail');
+
+            if (containerName === "Select Target Workload..." || !containerName) {
+                // The log content inner div needs to be updated so that the UI tailing logic doesn't break
+                const contentDiv = document.getElementById('log-content');
+                if (contentDiv) {
+                    contentDiv.innerHTML = "<div class='text-slate-500 text-center mt-10 italic'>Select a workload from the top navigation dropdown to stream logs</div>";
+                }
+                return;
+            }
+
+            const logContent = document.getElementById('log-content');
+
+            try {
+                const response = await fetch(`${API_BASE}/logs/${containerName}`);
+                const data = await response.json();
+
+                if (data.logs) {
+                    let formattedLogs = data.logs
+                        .replace(/ERROR|Error|error/g, '<span class="text-red-500 font-bold bg-red-900/30 px-1 rounded">ERROR</span>')
+                        .replace(/WARN|WARNING/g, '<span class="text-yellow-500 font-bold">WARN</span>')
+                        .replace(/INFO|info/g, '<span class="text-blue-400">INFO</span>')
+                        .replace(/([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+Z?)/g, '<span class="text-slate-500">$1</span>');
+
+                    logContent.innerHTML = formattedLogs;
+                    const viewer = document.getElementById('live-tail');
+                    viewer.scrollTop = viewer.scrollHeight;
+                } else {
+                    logContent.innerHTML = `<span class="text-red-400">Error reading logs: ${data.error}</span>`;
+                }
+            } catch (e) {
+                logContent.innerHTML = `<span class="text-red-500">Failed to connect to /logs endpoint.</span>`;
+            }
+        }
+
+        function parseMarkdown(text) {
+            let html = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>');
+            html = html.replace(/\*(.*?)\*/g, '<em class="text-slate-200">$1</em>');
+            html = html.replace(/`(.*?)`/g, '<code class="bg-[#0f172a] text-blue-300 px-1 py-0.5 rounded border border-slate-700 font-mono text-[11px]">$1</code>');
+            html = html.replace(/\n\n/g, '<br><br>');
+            html = html.replace(/\n- (.*?)(?=\n|$)/g, '<br>• $1');
+            return html;
+        }
+
+
+
+        function appendMessage(text, isUser = false, isError = false) {
+            const chatMessages = document.getElementById('chat-messages');
+            const wrapper = document.createElement('div');
+
+            if (isUser) {
+                wrapper.className = "flex items-end justify-end mb-4";
+                wrapper.innerHTML = `<div class="user-message py-2 px-3 text-sm max-w-[80%]">${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`;
+            } else {
+                wrapper.className = "flex items-start mb-4";
+                let contentHTML = isError
+                    ? `<span class="text-red-400 font-mono text-[11px]"><i class="text-red-500 mr-1">⚠️</i>${text}</span>`
+                    : parseMarkdown(text);
+
+                wrapper.innerHTML = `
+                    <div class="w-6 h-6 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center mr-2 flex-shrink-0 mt-1">
+                        <svg class="w-3.5 h-3.5 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h4zm0 8a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h4zm0 8a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h4z"/>
+                        </svg>
+                    </div>
+                    <div class="bot-message py-2 px-3 text-slate-300 max-w-[85%] text-[13px] leading-relaxed shadow-lg">${contentHTML}</div>
+                `;
+            }
+            chatMessages.appendChild(wrapper);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return wrapper;
+        }
+
+        function appendTypingIndicator() {
+            const chatMessages = document.getElementById('chat-messages');
+            const wrapper = document.createElement('div');
+            wrapper.className = "flex items-center mb-4 text-slate-500 pl-8"
+            wrapper.id = "typing-indicator";
+            wrapper.innerHTML = `
+                <div class="bg-[#1e293b]/80 backdrop-blur-sm px-3 py-2 rounded-xl rounded-tl-none border border-slate-700/50 flex space-x-1">
+                    <div class="w-1.5 h-1.5 bg-blue-400 rounded-full typing-dot"></div>
+                    <div class="w-1.5 h-1.5 bg-blue-400 rounded-full typing-dot"></div>
+                    <div class="w-1.5 h-1.5 bg-blue-400 rounded-full typing-dot"></div>
+                </div>
+            `;
+            chatMessages.appendChild(wrapper);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const el = document.getElementById('typing-indicator');
+            if (el) el.remove();
+        }
+
+        function clearChat() {
+            chatHistory = [];
+            const chatMessages = document.getElementById('chat-messages');
+            chatMessages.innerHTML = `
+                <div class="flex items-start">
+                    <div class="bot-message p-3 text-slate-300 max-w-[85%] text-[13px] leading-relaxed">
+                        Memory wiped. 🧠 Let's start over.
+                    </div>
+                </div>
+            `;
+        }
+
+        async function sendChatMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('chat-input');
+            const submitBtn = document.getElementById('send-btn');
+            const message = input.value.trim();
+            const container = document.getElementById('attack-target').value;
+
+            if (!message) return;
+
+            input.value = '';
+            input.disabled = true;
+            submitBtn.disabled = true;
+            appendMessage(message, true);
+            appendTypingIndicator();
+
+            try {
+                const response = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        container: container,
+                        history: chatHistory
+                    })
+                });
+
+                const data = await response.json();
+                removeTypingIndicator();
+
+                if (data.reply) {
+                    appendMessage(data.reply);
+                    chatHistory.push({ "role": "user", "content": message });
+                    chatHistory.push({ "role": "assistant", "content": data.reply });
+                    if (chatHistory.length > 10) chatHistory = chatHistory.slice(chatHistory.length - 10);
+                } else if (data.error) {
+                    appendMessage("Critical System Error: " + data.error, false, true);
+                }
+            } catch (e) {
+                removeTypingIndicator();
+                appendMessage("Failed to contact the Llama-3 brain. Neural link severed.", false, true);
+            } finally {
+                input.disabled = false;
+                submitBtn.disabled = false;
+                input.focus();
+            }
+        }
+
+        // --- 7. START BACKGROUND LOOPS ---
+        // --- INITIALIZATION ---
+        fetchProcesses();
+        setInterval(fetchMetrics, 3000);
+        setInterval(fetchProcesses, 5000);
+
+        // Add listener so the live tail updates immediately when user changes the target
+        document.getElementById('attack-target').addEventListener('change', fetchLogs);
+
+        setInterval(() => {
+            if (document.getElementById('tab-opsbot').classList.contains('block')) {
+                fetchLogs();
+            }
+        }, 3000);
     </script>
 </body>
+
 </html>
