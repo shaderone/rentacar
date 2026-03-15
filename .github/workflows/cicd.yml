@@ -38,9 +38,26 @@ jobs:
     - name: Run Jest Test Suite
       run: npm test
 
+  security:
+    name: Security Scanning (DevSecOps)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          scanners: 'vuln,secret,config'
+        continue-on-error: true # Continue pipeline for the demo even if vulnerabilities are found
+
   deploy:
     name: Deploy to Production EC2
-    needs: test # This is the critical part - it forces deployment to wait for tests!
+    needs: [test, security] # Deployment now waits for BOTH tests and security scans
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
