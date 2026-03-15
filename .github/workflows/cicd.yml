@@ -32,7 +32,7 @@ jobs:
     - name: Set up Test Environment Variables
       run: |
         echo "MONGO_URI=${{ secrets.MONGO_URI }}" >> ../.env
-        echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> ../.env
+        echo "JWT_SECRET=test_secret_key" >> ../.env
         echo "NODE_ENV=test" >> ../.env
 
     - name: Run Jest Test Suite
