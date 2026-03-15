@@ -1,0 +1,58 @@
+name: Sentinel Enterprise CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    name: Build & Test Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
+    strategy:
+      matrix:
+        node-version: [20.x]
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: ./server/package-lock.json
+
+    - name: Install Dependencies
+      run: npm ci
+      
+    - name: Set up Test Environment Variables
+      run: |
+        echo "MONGO_URI=mongodb://localhost:27017/test_db" >> ../.env
+        echo "JWT_SECRET=test_secret_key" >> ../.env
+        echo "NODE_ENV=test" >> ../.env
+
+    - name: Run Jest Test Suite
+      run: npm test
+
+  deploy:
+    name: Deploy to Production EC2
+    needs: test # This is the critical part - it forces deployment to wait for tests!
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: SSH and Update Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/rentacar
+            git pull origin main
+            docker-compose up -d --build
+            docker-compose restart sentinel
