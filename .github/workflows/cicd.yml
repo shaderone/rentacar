@@ -8,6 +8,14 @@ jobs:
   test:
     name: Build & Test Backend
     runs-on: ubuntu-latest
+    
+    # Provide a MongoDB instance for testing
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+          
     defaults:
       run:
         working-directory: ./server
