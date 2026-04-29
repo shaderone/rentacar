@@ -174,7 +174,8 @@ def sentinel_monitor_loop():
         prediction = model.predict([[current_cpu, current_mem]])[0]
         
         # Logic: It's an anomaly if the model says -1 AND either load is over a sensible threshold, OR if there's a hardware spike
-        is_anomaly = (prediction == -1 and (current_cpu > 25.0 or current_mem > 60.0)) or (current_cpu > 60.0 or current_mem > 75.0)
+        # (Adjusted for 1GB RAM EC2 instances where baseline memory sits at ~75-80%)
+        is_anomaly = (prediction == -1 and (current_cpu > 30.0 or current_mem > 85.0)) or (current_cpu > 85.0 or current_mem > 95.0)
 
         # 3. CALCULATE WEIGHTED HEALTH SCORE
         # Average of CPU and Memory headroom
@@ -202,7 +203,7 @@ def sentinel_monitor_loop():
             # We don't 'continue' here anymore, so the rest of the loop (Green Ops) can still check state
             
         # 4.5 AUTONOMOUS SELF-HEALING
-        if system_state["is_anomaly"] and (current_cpu > 70.0 or current_mem > 70.0):
+        if system_state["is_anomaly"] and (current_cpu > 80.0 or current_mem > 90.0):
             logger.error("🔥 CRITICAL LIMIT REACHED! Initiating Autonomous Self-Healing.")
             send_telegram("🔥 <b>CRITICAL LIMIT BREACHED</b>\nExecuting autonomous self-healing protocol to prevent crash.")
             execute_fix("auto")
