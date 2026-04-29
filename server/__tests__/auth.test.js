@@ -1,19 +1,26 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+const { MongoMemoryServer } = require('mongodb-memory-server');
 // Load env variables first
 dotenv.config({ path: '../.env' });
 const { app } = require('../server'); // Importing your app
 
+let mongoServer;
 
 // Connect to DB before tests start
 beforeAll(async () => {
-    await mongoose.connect(process.env.MONGO_URI);
+    mongoServer = await MongoMemoryServer.create();
+    const mongoUri = mongoServer.getUri();
+    await mongoose.connect(mongoUri);
 });
 
 // Close DB connection after tests finish
 afterAll(async () => {
     await mongoose.connection.close();
+    if (mongoServer) {
+        await mongoServer.stop();
+    }
 });
 
 describe('Auth API Endpoints', () => {
