@@ -16,7 +16,9 @@ const app = express();
 app.set('json spaces', 2); // to make the json responses pretty printed with 2 spaces
 
 // 2. Connect to Database
-connectDB();
+if (process.env.NODE_ENV !== 'test') {
+    connectDB();
+}
 
 // 3. Middleware (The Setup)
 app.use(express.json()); // Allows server to accept JSON data
