@@ -122,11 +122,16 @@
                     class="text-blue-500">AIOps</span></h1>
         </div>
         <div class="flex items-center space-x-6 text-sm font-mono text-slate-400">
-            <div class="flex items-center space-x-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50">
+            <!-- <div class="flex items-center space-x-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/50">
                 <span>Pipeline:</span>
                 <div class="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]"></div>
                 <span class="text-emerald-400 font-bold tracking-wider">PASSED</span>
-            </div>
+            </div> -->
+            <button onclick="executeRemediation()" id="remediate-btn"
+                class="hidden bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-400 border border-emerald-800/50 px-4 py-1.5 rounded text-xs font-semibold tracking-wider uppercase transition-all shadow-sm opacity-50 cursor-not-allowed"
+                disabled>
+                Execute AI Fix
+            </button>
             <div>
                 System Status: <span id="health-score" class="text-emerald-500 font-bold text-lg">100%</span>
             </div>
@@ -147,19 +152,20 @@
             </button>
 
             <!-- Global AI Actions aligned to the right -->
-            <div class="ml-auto flex items-center gap-4 pb-2">
+            <div class="ml-auto flex items-center gap-2 pb-2">
                 <select id="attack-target"
                     class="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-blue-500">
                     <option value="Select Target Workload...">Select Target Workload...</option>
                 </select>
+                <select id="attack-type"
+                    class="bg-red-950/40 border border-red-800/50 text-red-300 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-red-500">
+                    <option value="cpu_spike">Cryptojacking (CPU Spike)</option>
+                    <option value="memory_leak">Severe Memory Leak</option>
+                    <option value="ddos">DDoS Traffic Surge</option>
+                </select>
                 <button onclick="toggleAttack()" id="attack-btn"
                     class="bg-red-900/40 hover:bg-red-800/60 text-red-400 border border-red-800/50 px-4 py-1.5 rounded text-xs font-semibold tracking-wider uppercase transition-all shadow-sm">
-                    Start Chaos Attack
-                </button>
-                <button onclick="executeRemediation()" id="remediate-btn"
-                    class="bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-400 border border-emerald-800/50 px-4 py-1.5 rounded text-xs font-semibold tracking-wider uppercase transition-all shadow-sm opacity-50 cursor-not-allowed"
-                    disabled>
-                    Execute AI Fix
+                    Simulate Attack
                 </button>
             </div>
         </nav>
@@ -179,8 +185,13 @@
                         <div
                             class="absolute inset-0 bg-gradient-to-b from-blue-900/5 to-transparent pointer-events-none">
                         </div>
-                        <h2 class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-2 relative z-10">
+                        <h2
+                            class="text-sm uppercase tracking-widest text-slate-400 font-semibold mb-2 relative z-10 flex justify-between items-center">
                             Cluster Telemetry
+                            <div class="flex space-x-6 text-xs font-mono">
+                                <div>CPU: <span id="val-cpu" class="text-blue-400 font-bold ml-1">0.0%</span></div>
+                                <div>MEM: <span id="val-mem" class="text-purple-400 font-bold ml-1">0.0%</span></div>
+                            </div>
                         </h2>
                         <div class="relative flex-grow w-full z-10 mt-2">
                             <canvas id="cpuChart"></canvas>
@@ -376,10 +387,20 @@
             data: {
                 labels: [],
                 datasets: [{
-                    label: 'CPU Usage (%)',
+                    label: 'CPU (%)',
                     data: [],
                     borderColor: '#3b82f6',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Memory (%)',
+                    data: [],
+                    borderColor: '#a855f7',
+                    backgroundColor: 'rgba(168, 85, 247, 0.1)',
                     borderWidth: 2,
                     fill: true,
                     tension: 0.4,
@@ -412,21 +433,58 @@
             terminal.scrollTop = terminal.scrollHeight;
         }
 
+        let historyCount = 0;
+
         // --- 3. CORE METRICS LOOP ---
         async function fetchMetrics() {
             try {
                 const response = await fetch(`${API_BASE}/metrics`);
                 const data = await response.json();
 
+                if (data.history) {
+                    if (data.history.length < historyCount) {
+                        historyCount = 0; // Backend restarted
+                        const logContainer = document.getElementById('action-log');
+                        if (logContainer) logContainer.innerHTML = '';
+                    }
+
+                    if (data.history.length > historyCount) {
+                        for (let i = historyCount; i < data.history.length; i++) {
+                            logToTerminal(`[SYSTEM ACTION] ${data.history[i].event}`, "success");
+                        }
+                        historyCount = data.history.length;
+                    }
+                }
+
+                // If an attack was auto-healed, sync UI buttons (moved outside history loop)
+                if (isAttacking && !data.is_anomaly && !data.simulated_attack) {
+                    isAttacking = false;
+                    const btn = document.getElementById('attack-btn');
+                    if (btn) {
+                        btn.innerHTML = '🔥 Simulate Attack';
+                        btn.classList.replace('text-slate-400', 'text-red-400');
+                        btn.classList.replace('hover:bg-slate-700', 'hover:bg-red-800/60');
+                        btn.classList.replace('bg-slate-800', 'bg-red-900/40');
+                        btn.classList.replace('border-slate-600', 'border-red-800/50');
+                    }
+                }
+
                 document.getElementById('health-score').innerText = `${data.health_score}%`;
+
+                const valCpuEl = document.getElementById('val-cpu');
+                const valMemEl = document.getElementById('val-mem');
+                if (valCpuEl) valCpuEl.innerText = `${data.cpu.toFixed(1)}%`;
+                if (valMemEl) valMemEl.innerText = `${data.memory.toFixed(1)}%`;
 
                 const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 if (cpuChart.data.labels.length > 20) {
                     cpuChart.data.labels.shift();
                     cpuChart.data.datasets[0].data.shift();
+                    cpuChart.data.datasets[1].data.shift();
                 }
                 cpuChart.data.labels.push(timeNow);
                 cpuChart.data.datasets[0].data.push(data.cpu);
+                cpuChart.data.datasets[1].data.push(data.memory);
                 cpuChart.update();
 
                 const graphCard = document.getElementById('graph-card');
@@ -441,9 +499,11 @@
                     statusDot.classList.replace('bg-emerald-500', 'bg-red-500');
                     cpuChart.data.datasets[0].borderColor = '#ef4444';
                     cpuChart.data.datasets[0].backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                    cpuChart.data.datasets[1].borderColor = '#ef4444';
+                    cpuChart.data.datasets[1].backgroundColor = 'rgba(239, 68, 68, 0.2)';
 
                     remediateBtn.disabled = false; // Enable remediate button
-                    remediateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    remediateBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'hidden');
 
 
                     if (data.current_diagnosis && !document.getElementById('terminal-output').innerHTML.includes(data.current_diagnosis.substring(0, 20))) {
@@ -458,9 +518,11 @@
                     statusDot.classList.replace('bg-red-500', 'bg-emerald-500');
                     cpuChart.data.datasets[0].borderColor = '#3b82f6';
                     cpuChart.data.datasets[0].backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                    cpuChart.data.datasets[1].borderColor = '#a855f7';
+                    cpuChart.data.datasets[1].backgroundColor = 'rgba(168, 85, 247, 0.1)';
 
                     remediateBtn.disabled = true; // Disable remediate button
-                    remediateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    remediateBtn.classList.add('opacity-50', 'cursor-not-allowed', 'hidden');
                 }
 
             } catch (error) {
@@ -519,7 +581,11 @@
                     // Buttons markup
                     let actionBtns = '';
                     if (p.id !== '-') {
-                        if (isRunning) {
+                        if (p.name.includes('_replica_')) {
+                            actionBtns = `
+                                <button onclick="manageContainer('${p.name}', 'delete', this)" class="text-[10px] uppercase tracking-wider bg-red-900/40 hover:bg-red-600 border border-red-800/50 hover:border-red-500 text-red-300 px-2.5 py-1 rounded transition-colors mr-1">Delete</button>
+                            `;
+                        } else if (isRunning) {
                             actionBtns = `
                                 <button onclick="manageContainer('${p.name}', 'restart', this)" class="text-[10px] uppercase tracking-wider bg-slate-800 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 text-slate-300 px-2.5 py-1 rounded transition-colors mr-1">Restart</button>
                                 <button onclick="manageContainer('${p.name}', 'stop', this)" class="text-[10px] uppercase tracking-wider bg-slate-800 hover:bg-red-600 border border-slate-700 hover:border-red-500 text-slate-300 px-2.5 py-1 rounded transition-colors">Stop</button>
@@ -552,7 +618,7 @@
                 }
 
             } catch (error) {
-                document.getElementById('process-list').innerHTML = `<tr><td colspan="3" class="py-4 text-center text-red-500">Failed to load Docker socket data</td></tr>`;
+                document.getElementById('process-list').innerHTML = `<tr><td colspan="3" class="py-4 text-center text-red-500">Fetching data from docker socket. please wait a few seconds.</td></tr>`;
             }
         }
 
@@ -563,7 +629,8 @@
             const btn = document.getElementById('attack-btn');
             const remediateBtn = document.getElementById('remediate-btn');
             const targetName = document.getElementById('attack-target').value; // Read from global dropdown
-            const containerQuery = targetName && targetName !== "Select Target Workload..." ? `?container=${targetName}` : "";
+            const attackType = document.getElementById('attack-type').value;
+            const containerQuery = targetName && targetName !== "Select Target Workload..." ? `?container=${targetName}&type=${attackType}` : `?type=${attackType}`;
 
             if (!isAttacking) {
                 isAttacking = true;
@@ -577,7 +644,7 @@
                 await fetch(`${API_BASE}/simulate_attack${containerQuery}`, { method: 'POST' });
             } else {
                 isAttacking = false;
-                btn.innerHTML = '🔥 Start Chaos Attack';
+                btn.innerHTML = '🔥 Simulate Attack';
                 btn.classList.replace('text-slate-400', 'text-red-400');
                 btn.classList.replace('hover:bg-slate-700', 'hover:bg-red-800/60');
                 btn.classList.replace('bg-slate-800', 'bg-red-900/40');
@@ -587,7 +654,7 @@
                 await fetch(`${API_BASE}/remediate/manual-override`, { method: 'POST' });
 
                 remediateBtn.disabled = true;
-                remediateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                remediateBtn.classList.add('opacity-50', 'cursor-not-allowed', 'hidden');
 
                 // If on dashboard, reset graph UI
                 const graphCard = document.getElementById('graph-card');
@@ -596,6 +663,8 @@
                     document.getElementById('status-dot').classList.replace('bg-red-500', 'bg-emerald-500');
                     cpuChart.data.datasets[0].borderColor = '#3b82f6';
                     cpuChart.data.datasets[0].backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                    cpuChart.data.datasets[1].borderColor = '#a855f7';
+                    cpuChart.data.datasets[1].backgroundColor = 'rgba(168, 85, 247, 0.1)';
                     cpuChart.update();
                 }
             }
@@ -609,12 +678,12 @@
                 const result = await response.json();
 
                 if (result.status === "success") {
-                    logToTerminal(result.message, "success");
+                    // The action logs will be pulled automatically by the fetchMetrics history sync loop
                     logToTerminal("System returning to nominal parameters. Alert cleared.", "success");
 
                     const remediateBtn = document.getElementById('remediate-btn');
                     remediateBtn.disabled = true;
-                    remediateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    remediateBtn.classList.add('opacity-50', 'cursor-not-allowed', 'hidden');
 
                     if (isAttacking) {
                         toggleAttack(); // Sync state, stops attack and resets attack-btn

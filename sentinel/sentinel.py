@@ -4,7 +4,7 @@ import docker
 import os
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 from sklearn.ensemble import IsolationForest
 from groq import Groq
@@ -53,12 +53,15 @@ except Exception as e:
 # 4. GLOBAL STATE (Feeds the Dashboard)
 system_state: Dict[str, Any] = {
     "cpu": 0.0,
+    "memory": 0.0,
     "health_score": 100,
     "is_anomaly": False,
     "current_diagnosis": "",
     "history": [],
     "simulated_attack": False,
-    "simulated_target": ""
+    "simulated_target": "",
+    "attack_type": "",
+    "last_scale_time": 0.0
 }
 
 # 5. CORE FUNCTIONS
@@ -79,12 +82,12 @@ def send_telegram(message):
     except Exception as e:
         logger.error(f"🚨 Telegram Network Failed: {e}")
 
-def get_ai_diagnostic(cpu_load):
+def get_ai_diagnostic(cpu_load, mem_load):
     if not client: return "⚠️ AI Client not initialized."
     target = system_state.get("simulated_target", "a critical container")
     prompt = (
-        f"Alert: Server CPU is at {cpu_load}%. The container '{target}' is currently experiencing abnormal traffic or failing health checks. "
-        "1. Summarize likely cause in one sentence, mentioning the specific container. "
+        f"Alert: Server CPU is at {cpu_load}% and Memory is at {mem_load}%. The container '{target}' is currently experiencing abnormal traffic or failing health checks. "
+        "1. Summarize likely cause in one sentence, mentioning the specific container and whether it looks like a memory leak or CPU spike. "
         "2. Provide exactly 3 bash commands to fix it. Format the response strictly using basic HTML (<b> for bold, <code> for commands). Do NOT use markdown."
     )
     try:
@@ -98,25 +101,50 @@ def get_ai_diagnostic(cpu_load):
 def get_cpu_load() -> float:
     try:
         query = '100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
-        res = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={'query': query}, timeout=2)
+        res = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={'query': query}, timeout=5)
         data = res.json()['data']['result']
         if data: return float(data[0]['value'][1])
-        return 0.0
+        return system_state.get("cpu", 0.0)
     except Exception:
-        return 0.0
+        return system_state.get("cpu", 0.0)
+
+def get_memory_load() -> float:
+    try:
+        query = '100 - ((node_memory_MemAvailable_bytes * 100) / node_memory_MemTotal_bytes)'
+        res = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={'query': query}, timeout=5)
+        data = res.json()['data']['result']
+        if data: return float(data[0]['value'][1])
+        return system_state.get("memory", 0.0)
+    except Exception:
+        return system_state.get("memory", 0.0)
+
+def kill_attack_processes(target_container):
+    try:
+        target_container.exec_run("sh -c 'pkill -9 -f \"true\"'")
+        target_container.exec_run("sh -c 'pkill -9 -f \"dd if=/dev/urandom\"'")
+        target_container.exec_run("sh -c 'pkill -9 -f \"base64\"'")
+        target_container.exec_run("sh -c 'pkill -9 -f \"while\"'")
+        target_container.exec_run("sh -c 'pkill -9 -f \"sort\"'")
+        target_container.exec_run("sh -c 'rm -f /dev/shm/leak_*'")
+    except Exception as e:
+        logger.warning(f"Failed to explicitly kill processes: {e}")
 
 # 6. BACKGROUND MONITORING LOOP
 def sentinel_monitor_loop():
     send_telegram(f"🛡️ <b>Sentinel API Online</b>\nEnvironment: Web\nModel: {MODEL_NAME}")
     
-    TRAIN_POINTS = 10
+    TRAIN_POINTS = 15
     logger.info(f"🎓 Learning Baseline ({TRAIN_POINTS}s)...")
-    training_data = []
+    
+    # Pre-seed with normal variance (CPU and Memory) so the model doesn't overfit perfectly flat lines
+    training_data = [[0.0, 30.0], [5.0, 35.0], [10.0, 40.0], [15.0, 45.0], [25.0, 50.0]]
 
     for i in range(TRAIN_POINTS):
-        load = get_cpu_load()
-        training_data.append([load])
-        system_state["cpu"] = float(f"{load:.2f}")
+        cpu = get_cpu_load()
+        mem = get_memory_load()
+        training_data.append([cpu, mem])
+        system_state["cpu"] = float(f"{cpu:.2f}")
+        system_state["memory"] = float(f"{mem:.2f}")
         time.sleep(1)
 
     model = IsolationForest(contamination=0.05, random_state=42)
@@ -126,21 +154,24 @@ def sentinel_monitor_loop():
     current_idle_time = 0
     while True:
         # 1. FETCH DATA
-        current_load = 99.9 if system_state["simulated_attack"] else get_cpu_load()
-        system_state["cpu"] = float(f"{current_load:.2f}")
+        current_cpu = get_cpu_load()
+        current_mem = get_memory_load()
+        
+        system_state["cpu"] = float(f"{current_cpu:.2f}")
+        system_state["memory"] = float(f"{current_mem:.2f}")
 
-        # 2. RUN AI ANOMALY DETECTION
-        # We calculate this first so we can use it for the health score
-        prediction = model.predict([[current_load]])[0]
-        # Logic: It's an anomaly if the model says -1 OR if it's a dangerous hardware spike (>90)
-        is_anomaly = (prediction == -1 and current_load > 15.0) or (current_load > 90.0)
+        # 2. RUN AI ANOMALY DETECTION (Multivariate)
+        # Pass both metrics into the trained model
+        prediction = model.predict([[current_cpu, current_mem]])[0]
+        
+        # Logic: It's an anomaly if the model says -1 AND either load is over a sensible threshold, OR if there's a hardware spike
+        is_anomaly = (prediction == -1 and (current_cpu > 25.0 or current_mem > 60.0)) or (current_cpu > 60.0 or current_mem > 75.0)
 
         # 3. CALCULATE WEIGHTED HEALTH SCORE
-        # Start with simple headroom calculation
-        base_health = 100 - current_load
+        # Average of CPU and Memory headroom
+        base_health = ((100 - current_cpu) + (100 - current_mem)) / 2
         
-        # Apply AI Penalty: If an anomaly is detected, we slash the health by 40% 
-        # because the system is behaving unpredictably.
+        # Apply AI Penalty: If an anomaly is detected, slash the health by 40% 
         if is_anomaly:
             base_health = base_health * 0.6 
             
@@ -148,34 +179,53 @@ def sentinel_monitor_loop():
 
         # 4. HANDLE ALERTS (Only if state changed to 'Anomaly')
         if is_anomaly and not system_state["is_anomaly"]:
-            logger.warning(f"🚨 ANOMALY DETECTED: {current_load:.2f}%")
+            logger.warning(f"🚨 ANOMALY DETECTED: CPU {current_cpu:.2f}% | MEM {current_mem:.2f}%")
             system_state["is_anomaly"] = True
-            insight = get_ai_diagnostic(current_load)
+            insight = get_ai_diagnostic(current_cpu, current_mem)
             system_state["current_diagnosis"] = insight
             
-            # Escape HTML in insight just in case the AI messed up, then replace basic ones
+            # Escape HTML in insight just in case the AI messed up
             safe_insight = insight.replace("<", "&lt;").replace(">", "&gt;")
             safe_insight = safe_insight.replace("&lt;b&gt;", "<b>").replace("&lt;/b&gt;", "</b>")
             safe_insight = safe_insight.replace("&lt;code&gt;", "<code>").replace("&lt;/code&gt;", "</code>")
             
-            send_telegram(f"🚨 <b>SYSTEM ANOMALY</b>\nCPU Load: <code>{current_load:.2f}%</code>\n\n🧠 <b>AI Diagnostic:</b>\n{safe_insight}")
+            send_telegram(f"🚨 <b>MULTIVARIATE ANOMALY</b>\nCPU: <code>{current_cpu:.2f}%</code> | Mem: <code>{current_mem:.2f}%</code>\n\n🧠 <b>AI Diagnostic:</b>\n{safe_insight}")
             # We don't 'continue' here anymore, so the rest of the loop (Green Ops) can still check state
+            
+        # 4.5 AUTONOMOUS SELF-HEALING
+        if system_state["is_anomaly"] and (current_cpu > 70.0 or current_mem > 70.0):
+            logger.error("🔥 CRITICAL LIMIT REACHED! Initiating Autonomous Self-Healing.")
+            send_telegram("🔥 <b>CRITICAL LIMIT BREACHED</b>\nExecuting autonomous self-healing protocol to prevent crash.")
+            execute_fix("auto")
         
         # Reset anomaly flag if system stabilizes
-        if not is_anomaly:
+        if not is_anomaly and system_state["is_anomaly"]:
             system_state["is_anomaly"] = False
 
         # 5. GREEN OPS (Energy Tracking)
-        if current_load < 5.0 and not is_anomaly:
-            current_idle_time += 5 
-            if current_idle_time >= 300: # 5 mins
-                wasted_kwh = (50 * (current_idle_time / 3600)) / 1000
-                send_telegram(f"🌿 <b>GREEN OPS ALERT</b>\nIdle for {current_idle_time/60:.1f} mins.\n⚡ Waste: <code>{wasted_kwh:.4f} kWh</code>\n☁️ Carbon: <code>{wasted_kwh * 400:.2f}g CO2</code>")
+        if current_cpu < 5.0 and not is_anomaly:
+            current_idle_time += 2 
+            if current_idle_time >= 15: # 15 seconds
+                replicas_to_delete = []
+                if docker_client:
+                    for c in docker_client.containers.list():
+                        if "_replica_" in c.name: # type: ignore
+                            replicas_to_delete.append(c)
+                            
+                if replicas_to_delete:
+                    for c in replicas_to_delete:
+                        c.remove(force=True) # type: ignore
+                    send_telegram(f"🌿 <b>GREEN OPS SCALE-IN</b>\nIdle for {current_idle_time}s.\nScaled down {len(replicas_to_delete)} unused replicas to save energy.")
+                    system_state["history"].append({"time": datetime.now().strftime("%H:%M:%S"), "event": f"Green Ops: Deleted {len(replicas_to_delete)} unused replicas."})
+                else:
+                    wasted_kwh = (50 * (current_idle_time / 3600)) / 1000
+                    send_telegram(f"🌿 <b>GREEN OPS ALERT</b>\nIdle for {current_idle_time}s.\n⚡ Waste: <code>{wasted_kwh:.4f} kWh</code>\n☁️ Carbon: <code>{wasted_kwh * 400:.2f}g CO2</code>")
+                
                 current_idle_time = 0 
         else:
             current_idle_time = 0
 
-        time.sleep(5)
+        time.sleep(2)
 
 @app.on_event("startup")
 async def startup_event():
@@ -195,6 +245,22 @@ def serve_dashboard():
 def get_metrics():
     return system_state
 
+def format_uptime(c):
+    if c.status != "running":
+        return c.status.capitalize()
+    try:
+        started_at = c.attrs['State']['StartedAt']
+        time_str = started_at.split('.')[0]
+        started = datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S').replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        diff = int((now - started).total_seconds())
+        if diff < 60: return f"Up {diff} seconds"
+        elif diff < 3600: return f"Up {diff // 60} minutes"
+        elif diff < 86400: return f"Up {diff // 3600} hours"
+        else: return f"Up {diff // 86400} days"
+    except Exception:
+        return c.status.capitalize()
+
 @app.get("/processes")
 def get_processes():
     if not docker_client: return [{"id": "-", "name": "Docker Offline", "status": "Error"}]
@@ -203,10 +269,11 @@ def get_processes():
     containers = []
     
     for c in docker_client.containers.list(all=True):
+        if "sentinel" in c.name: continue
         # Strictly check if any allowed name EXACTLY matches, or is the core part of the docker compose name
         # Docker Compose often prefixes directory name e.g. "rentacar-backend-1"
         if any(a in c.name for a in allowed) and not "kind" in c.name and not "minikube" in c.name: # basic extra filters just in case
-            containers.append({"id": c.short_id, "name": c.name, "status": c.status})
+            containers.append({"id": c.short_id, "name": c.name, "status": format_uptime(c)})
             
     return containers
 
@@ -236,6 +303,7 @@ def chat_with_opsbot(req: ChatRequest):
     
     # 1. Fetch current context
     current_cpu = system_state["cpu"]
+    current_mem = system_state["memory"]
     recent_logs = ""
     
     if req.container and docker_client and req.container != "Select a Container":
@@ -247,12 +315,12 @@ def chat_with_opsbot(req: ChatRequest):
 
     # 2. Build the System Prompt
     is_anomaly = system_state["is_anomaly"]
-    status_text = "CRITICAL ANOMALY DETECTED" if is_anomaly else "NORMAL NOMINAL PARAMETERS (If CPU is high but this is NORMAL, then the system was just remediated and the CPU average is settling down)."
+    status_text = "CRITICAL ANOMALY DETECTED" if is_anomaly else "NORMAL NOMINAL PARAMETERS (If CPU/Memory are high but this is NORMAL, then the system was just remediated and the metrics are settling down)."
     
     system_prompt = (
         "You are OpsBot, an elite DevOps AI Assistant built into the Sentinel AIOps platform. "
         "Your job is to help the user diagnose and fix infrastructure problems. "
-        f"CURRENT TELEMETRY SYSTEM STATE: {status_text}. Recent CPU Load Average is {current_cpu}%. "
+        f"CURRENT TELEMETRY SYSTEM STATE: {status_text}. Recent CPU is {current_cpu}%, Memory is {current_mem}%. "
         f"SELECTED CONTAINER: {req.container}. "
         f"RECENT LOGS FROM CONTAINER:\n{recent_logs}\n\n"
         "Guidelines:\n"
@@ -285,47 +353,177 @@ def chat_with_opsbot(req: ChatRequest):
         return {"error": f"LLM Error: {str(e)}"}
 
 @app.post("/simulate_attack")
-def simulate_attack(container: str = "rentacar_backend"):
+def simulate_attack(container: str = "rentacar_backend", type: str = "cpu_spike"):
     system_state["simulated_attack"] = True
     system_state["simulated_target"] = container
-    return {"message": f"Attack simulated on {system_state['simulated_target']}."}
+    system_state["attack_type"] = type
+    
+    if docker_client:
+        try:
+            target = None
+            for c in docker_client.containers.list():
+                if container in c.name and "_replica_" not in c.name: # type: ignore
+                    target = c
+                    break
+            
+            if target:
+                if type == "cpu_spike":
+                    cores = max(1, int(os.cpu_count() * 0.75)) if os.cpu_count() else 1
+                    cmd = ['sh', '-c', f'i=1; while [ $i -le {cores} ]; do while true; do true; done & i=$((i+1)); sleep 1; done']
+                    target.exec_run(cmd, detach=True) # type: ignore
+                elif type == "memory_leak":
+                    cmd = ['sh', '-c', 'sort /dev/zero & sort /dev/zero & sort /dev/zero & sort /dev/zero & wait']
+                    target.exec_run(cmd, detach=True) # type: ignore
+                elif type == "ddos":
+                    cores = max(1, int(os.cpu_count() * 0.85)) if os.cpu_count() else 1
+                    cmd = ['sh', '-c', f'i=1; while [ $i -le {cores} ]; do while true; do true; done & i=$((i+1)); sleep 1; done & a=""; while true; do a="$a$(dd if=/dev/urandom bs=1M count=25 2>/dev/null | base64)"; sleep 1; done']
+                    target.exec_run(cmd, detach=True) # type: ignore
+        except Exception as e:
+            logger.error(f"Failed to execute real attack on {container}: {e}")
+            
+    return {"message": f"Real {type} initiated on {system_state['simulated_target']}."}
+
+def scale_out_container(base_container_name: str) -> str:
+    if not docker_client: return "Docker client offline."
+    try:
+        target = None
+        for c in docker_client.containers.list():
+            if base_container_name in c.name and "_replica_" not in c.name: # type: ignore
+                target = c
+                break
+                
+        if not target:
+            return f"Container '{base_container_name}' not found for scaling."
+            
+        image_name = target.image.tags[0] if target.image.tags else "rentacar-backend"
+        replica_name = f"{base_container_name}_replica_{int(time.time())}"
+        
+        # Get network of original container
+        network_name = list(target.attrs['NetworkSettings']['Networks'].keys())[0]
+        
+        # We don't map ports to avoid conflicts on host. 
+        # It's an internal replica.
+        new_c = docker_client.containers.run(
+            image=image_name,
+            detach=True,
+            name=replica_name,
+            network=network_name,
+            environment=target.attrs['Config']['Env']
+        )
+        return f"Auto-Scaled {base_container_name} (+1 Replica: {replica_name})"
+    except Exception as e:
+        logger.error(f"Scale out failed: {e}")
+        return f"Auto-Scale Failed: {str(e)}"
 
 @app.post("/remediate/{container_name}")
 def execute_fix(container_name: str):
     
     if container_name == "auto":
         # AI Auto-detects the target based on the current context that was attacked
-        container_name = system_state.get("simulated_target", "rentacar_backend")
+        container_name = system_state.get("simulated_target")
+        if not container_name:
+            container_name = "rentacar_backend"
         
-    action_msg = f"Simulated mock restart of {container_name}"
+    atk = system_state.get("attack_type", "")
+    is_scaling = False
     
-    # If it's a real container and not a manual UI override
-    if container_name != "manual-override":
+    if atk == "cpu_spike":
+        fix_desc = "Terminated cryptojacking process (SIGKILL) & restarted"
+    elif atk == "memory_leak":
+        fix_desc = "Flushed memory buffers and restarted worker processes"
+    elif atk == "ddos":
+        fix_desc = "High traffic detected! Provisioning new horizontal replica to handle load"
+        is_scaling = True
+    else:
+        fix_desc = "Executed generic container restart"
+        
+    action_msg = f"AI Automated Fix: {fix_desc}"
+    
+    if container_name == "manual-override":
+        target_name = system_state.get("simulated_target")
+        if not target_name:
+            target_name = "rentacar_backend"
+        action_msg = "Attack aborted manually. Original container restarted (Replicas left online)."
         if docker_client:
             try:
-                # Find the container that matches the name (handling ID prefixes if needed)
-                target = None
                 for c in docker_client.containers.list():
-                    if container_name in c.name: # type: ignore
-                        target = c
-                        break
-                        
-                if target:
-                    target.restart() # type: ignore
-                    action_msg = f"Restarted container: {getattr(target, 'name', container_name)}"
-                else:
-                    action_msg = f"Container '{container_name}' not found, simulation reset only."
+                    if target_name in c.name and "_replica_" not in c.name: # type: ignore
+                        kill_attack_processes(c)
+                        c.restart() # type: ignore
             except Exception as e:
-                logger.error(f"Docker restart failed: {e}")
-                action_msg = f"Docker error, but Sentinel is resetting state."
+                logger.error(f"Cleanup failed: {e}")
+    else:
+        if is_scaling:
+            current_time = time.time()
+            if current_time - system_state.get("last_scale_time", 0.0) > 10:
+                active_replicas = 0
+                if docker_client:
+                    for c in docker_client.containers.list():
+                        if "_replica_" in c.name: active_replicas += 1 # type: ignore
+                
+                if active_replicas < 3:
+                    scale_msg = scale_out_container(container_name)
+                    system_state["last_scale_time"] = current_time
+                    action_msg += f" | {scale_msg}"
+                    
+                    if active_replicas == 2:
+                        action_msg += " | Max capacity reached. Load distributed."
+                        if docker_client:
+                            try:
+                                for c in docker_client.containers.list():
+                                    if container_name in c.name and "_replica_" not in c.name: # type: ignore
+                                        kill_attack_processes(c)
+                                        c.restart() # type: ignore
+                            except Exception:
+                                pass
+                else:
+                    action_msg = "AI Auto-Scale: Max replica cap (3) reached. Load distributed."
+                    if docker_client:
+                        try:
+                            for c in docker_client.containers.list():
+                                if container_name in c.name and "_replica_" not in c.name: # type: ignore
+                                    kill_attack_processes(c)
+                                    c.restart() # type: ignore
+                        except Exception:
+                            pass
+            else:
+                action_msg = "AI Auto-Scale: Cooldown active."
+        else:
+            if docker_client:
+                try:
+                    target = None
+                    for c in docker_client.containers.list():
+                        if container_name in c.name and "_replica_" not in c.name: # type: ignore
+                            target = c
+                            break
+                            
+                    if target:
+                        kill_attack_processes(target)
+                        target.restart() # type: ignore
+                        action_msg += f" (Restarted {getattr(target, 'name', container_name)})"
+                    else:
+                        action_msg += f" (Container '{container_name}' not found)"
+                except Exception as e:
+                    logger.error(f"Docker restart failed: {e}")
+                    action_msg += " (Docker restart failed)"
 
-    # ALWAYS reset these flags to allow the next attack to trigger Telegram
-    system_state["simulated_attack"] = False
+    # Only reset simulated_attack if the attack was actually stopped
+    attack_stopped = True
+    if is_scaling and container_name != "manual-override":
+        if "Max capacity reached" not in action_msg and "Max replica cap (3)" not in action_msg:
+            attack_stopped = False
+            
+    if attack_stopped:
+        system_state["simulated_attack"] = False
+        
     system_state["is_anomaly"] = False
     system_state["current_diagnosis"] = ""
-    system_state["history"].append({"time": datetime.now().strftime("%H:%M:%S"), "event": action_msg})
     
-    return {"status": "success", "message": action_msg}
+    if "Cooldown active" not in action_msg and "Max replica cap" not in action_msg:
+        system_state["history"].append({"time": datetime.now().strftime("%H:%M:%S"), "event": action_msg})
+        return {"status": "success", "message": action_msg}
+    else:
+        return {"status": "cooldown", "message": action_msg}
 
 @app.post("/container/{container_name}/{action}")
 def manage_container(container_name: str, action: str):
@@ -335,17 +533,20 @@ def manage_container(container_name: str, action: str):
     try:
         target = None
         for c in docker_client.containers.list(all=True):
-            if container_name in c.name: # type: ignore
+            if c.name == container_name:
                 target = c
                 break
+        if not target:
+            for c in docker_client.containers.list(all=True):
+                if container_name in c.name and "_replica_" not in c.name: # type: ignore
+                    target = c
+                    break
                 
         if target is not None:
-            if action == 'restart':
-                target.restart() # type: ignore
-            elif action == 'stop':
-                target.stop() # type: ignore
-            elif action == 'start':
-                target.start() # type: ignore
+            if action == "restart": target.restart() # type: ignore
+            elif action == "stop": target.stop() # type: ignore
+            elif action == "start": target.start() # type: ignore
+            elif action == "delete": target.remove(force=True) # type: ignore
             else:
                 return {"error": f"Unknown action: {action}"}
                 
