@@ -7,6 +7,8 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Dict
 from sklearn.ensemble import IsolationForest
+from sklearn.linear_model import LinearRegression
+import numpy as np
 from groq import Groq
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +24,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://localhost:9090") 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 MODEL_NAME = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+TARGET_WORKLOAD = os.getenv("TARGET_WORKLOAD", "rentacar")
 
 # LOGGING & FASTAPI
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -152,10 +155,16 @@ def sentinel_monitor_loop():
     logger.info("✅ Model Trained. Sentinel Watching.")
 
     current_idle_time = 0
+    cpu_history = []
+    
     while True:
         # 1. FETCH DATA
         current_cpu = get_cpu_load()
         current_mem = get_memory_load()
+        
+        cpu_history.append(current_cpu)
+        if len(cpu_history) > 15:
+            cpu_history.pop(0)
         
         system_state["cpu"] = float(f"{current_cpu:.2f}")
         system_state["memory"] = float(f"{current_mem:.2f}")
@@ -202,26 +211,66 @@ def sentinel_monitor_loop():
         if not is_anomaly and system_state["is_anomaly"]:
             system_state["is_anomaly"] = False
 
-        # 5. GREEN OPS (Energy Tracking)
-        if current_cpu < 5.0 and not is_anomaly:
-            current_idle_time += 2 
-            if current_idle_time >= 15: # 15 seconds
-                replicas_to_delete = []
-                if docker_client:
-                    for c in docker_client.containers.list():
-                        if "_replica_" in c.name: # type: ignore
-                            replicas_to_delete.append(c)
-                            
-                if replicas_to_delete:
-                    for c in replicas_to_delete:
-                        c.remove(force=True) # type: ignore
-                    send_telegram(f"🌿 <b>GREEN OPS SCALE-IN</b>\nIdle for {current_idle_time}s.\nScaled down {len(replicas_to_delete)} unused replicas to save energy.")
-                    system_state["history"].append({"time": datetime.now().strftime("%H:%M:%S"), "event": f"Green Ops: Deleted {len(replicas_to_delete)} unused replicas."})
-                else:
-                    wasted_kwh = (50 * (current_idle_time / 3600)) / 1000
-                    send_telegram(f"🌿 <b>GREEN OPS ALERT</b>\nIdle for {current_idle_time}s.\n⚡ Waste: <code>{wasted_kwh:.4f} kWh</code>\n☁️ Carbon: <code>{wasted_kwh * 400:.2f}g CO2</code>")
+        # 5. GREEN OPS (Energy Tracking) & PREDICTIVE SCALE-IN
+        if not is_anomaly:
+            active_replicas = 0
+            if docker_client:
+                for c in docker_client.containers.list():
+                    if "_replica_" in c.name: active_replicas += 1 # type: ignore
+
+            # Predictive Scale-In
+            if active_replicas > 0 and len(cpu_history) >= 10:
+                X = np.array(range(len(cpu_history))).reshape(-1, 1)
+                y = np.array(cpu_history)
+                lin_reg = LinearRegression()
+                lin_reg.fit(X, y)
                 
-                current_idle_time = 0 
+                # Predict 3 steps ahead (6 seconds)
+                forecast = lin_reg.predict(np.array([[len(cpu_history) + 2]]))[0]
+                slope = lin_reg.coef_[0]
+                
+                if slope < -1.0 and forecast < 5.0 and current_cpu < 25.0:
+                    logger.info(f"📉 Predictive forecast shows CPU dropping to {forecast:.2f}%. Terminating replicas pre-emptively.")
+                    
+                    # We can reuse the execute_green_ops function logic inline here, or call the endpoint
+                    try:
+                        deleted = 0
+                        for c in docker_client.containers.list(all=True):
+                            if "_replica_" in c.name:
+                                c.remove(force=True) # type: ignore
+                                deleted += 1
+                        
+                        msg = f"[PREDICTIVE GREEN OPS] Forecasted idle state. Pre-emptively deleted {deleted} replicas."
+                        system_state["history"].append({"time": datetime.now().strftime("%H:%M:%S"), "event": msg})
+                        send_telegram(f"📉 <b>PREDICTIVE GREEN OPS</b>\nForecast: <code>{forecast:.2f}%</code> CPU.\nPre-emptively scaled down {deleted} replicas.")
+                        
+                        current_idle_time = 0
+                        cpu_history.clear()
+                    except Exception as e:
+                        logger.error(f"Predictive Scale-In failed: {e}")
+
+            # Standard Timeout-based Scale-In
+            if current_cpu < 5.0:
+                current_idle_time += 2 
+                if current_idle_time >= 15: # 15 seconds
+                    replicas_to_delete = []
+                    if docker_client:
+                        for c in docker_client.containers.list():
+                            if "_replica_" in c.name: # type: ignore
+                                replicas_to_delete.append(c)
+                                
+                    if replicas_to_delete:
+                        for c in replicas_to_delete:
+                            c.remove(force=True) # type: ignore
+                        send_telegram(f"🌿 <b>GREEN OPS SCALE-IN</b>\nIdle for {current_idle_time}s.\nScaled down {len(replicas_to_delete)} unused replicas to save energy.")
+                        system_state["history"].append({"time": datetime.now().strftime("%H:%M:%S"), "event": f"Green Ops: Deleted {len(replicas_to_delete)} unused replicas."})
+                    else:
+                        wasted_kwh = (50 * (current_idle_time / 3600)) / 1000
+                        send_telegram(f"🌿 <b>GREEN OPS ALERT</b>\nIdle for {current_idle_time}s.\n⚡ Waste: <code>{wasted_kwh:.4f} kWh</code>\n☁️ Carbon: <code>{wasted_kwh * 400:.2f}g CO2</code>")
+                    
+                    current_idle_time = 0 
+            else:
+                current_idle_time = 0
         else:
             current_idle_time = 0
 
@@ -262,18 +311,20 @@ def format_uptime(c):
         return c.status.capitalize()
 
 @app.get("/processes")
-def get_processes():
-    if not docker_client: return [{"id": "-", "name": "Docker Offline", "status": "Error"}]
-    
-    allowed = ['rentacar_backend', 'rentacar_frontend', 'prometheus', 'grafana', 'node_exporter', 'sentinel']
+def list_processes():
+    if not docker_client: return []
+    allowed = [f'{TARGET_WORKLOAD}_backend', f'{TARGET_WORKLOAD}_frontend', 'prometheus', 'grafana', 'node_exporter', 'sentinel']
     containers = []
     
-    for c in docker_client.containers.list(all=True):
-        if "sentinel" in c.name: continue
-        # Strictly check if any allowed name EXACTLY matches, or is the core part of the docker compose name
-        # Docker Compose often prefixes directory name e.g. "rentacar-backend-1"
-        if any(a in c.name for a in allowed) and not "kind" in c.name and not "minikube" in c.name: # basic extra filters just in case
-            containers.append({"id": c.short_id, "name": c.name, "status": format_uptime(c)})
+    try:
+        for c in docker_client.containers.list(all=True):
+            # Filtering logic to only show specific containers
+            # Docker Compose often prefixes directory name e.g. "my_app-backend-1"
+            base_name = c.name
+            if (any(a in base_name for a in allowed) or "_replica_" in base_name) and not "minikube" in c.name: 
+                containers.append({"id": c.short_id, "name": c.name, "status": format_uptime(c)})
+    except Exception:
+        pass
             
     return containers
 
@@ -291,6 +342,34 @@ def get_container_logs(container_name: str):
     except Exception as e:
         return {"error": str(e)}
 
+@app.get("/summarize_logs/{container_name}")
+def summarize_container_logs(container_name: str):
+    if not docker_client:
+        return {"error": "Docker Client Offline"}
+        
+    try:
+        container = docker_client.containers.get(container_name)
+        logs = container.logs(tail=100).decode('utf-8')
+        
+        prompt = f"""You are Sentinel AI, an elite DevOps forensics engine.
+Analyze the following recent Docker logs from the '{container_name}' container.
+Provide a concise, highly professional operational summary (2-3 sentences max).
+Focus strictly on current health, errors, or anomalies. Do not invent details.
+
+LOGS:
+{logs[-2000:]}"""
+
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=150,
+        )
+        summary = completion.choices[0].message.content
+        return {"summary": summary}
+    except Exception as e:
+        return {"error": str(e)}
+
 class ChatRequest(BaseModel):
     message: str
     container: str
@@ -301,7 +380,6 @@ def chat_with_opsbot(req: ChatRequest):
     if not client:
         return {"error": "Groq Client Offline"}
     
-    # 1. Fetch current context
     current_cpu = system_state["cpu"]
     current_mem = system_state["memory"]
     recent_logs = ""
@@ -313,32 +391,25 @@ def chat_with_opsbot(req: ChatRequest):
         except Exception:
             recent_logs = "Could not fetch logs for this container."
 
-    # 2. Build the System Prompt
     is_anomaly = system_state["is_anomaly"]
     status_text = "CRITICAL ANOMALY DETECTED" if is_anomaly else "NORMAL NOMINAL PARAMETERS (If CPU/Memory are high but this is NORMAL, then the system was just remediated and the metrics are settling down)."
     
     system_prompt = (
         "You are OpsBot, an elite DevOps AI Assistant built into the Sentinel AIOps platform. "
         "Your job is to help the user diagnose and fix infrastructure problems. "
-        f"CURRENT TELEMETRY SYSTEM STATE: {status_text}. Recent CPU is {current_cpu}%, Memory is {current_mem}%. "
+        f"CURRENT TELEMETRY SYSTEM STATE: {status_text}. Recent CPU is {current_cpu}%. Memory is {current_mem}%. "
         f"SELECTED CONTAINER: {req.container}. "
-        f"RECENT LOGS FROM CONTAINER:\n{recent_logs}\n\n"
-        "Guidelines:\n"
-        "- Be concise but highly technical.\n"
-        "- If the logs show an error stack trace (like a Javascript Error or Python Exception), point it out specifically.\n"
-        "- If the SYSTEM STATE is NORMAL, do NOT panic about the CPU load. Acknowledge the system is stabilizing.\n"
+        f"RECENT LOGS FROM CONTAINER:\\n{recent_logs}\\n\\n"
+        "Guidelines:\\n"
+        "- Be concise but highly technical.\\n"
+        "- If the logs show an error stack trace (like a Javascript Error or Python Exception), point it out specifically.\\n"
+        "- If the SYSTEM STATE is NORMAL, do NOT panic about the CPU load. Acknowledge the system is stabilizing.\\n"
         "- Use Markdown formatting for your responses if necessary."
     )
 
-    # 3. Assemble full message history
     messages = [{"role": "system", "content": system_prompt}]
-    
-    # Append the past conversation history the client sent us
     for msg in req.history:
-        # Assuming history format is {"role": "user/assistant", "content": "..."}
         messages.append(msg)
-        
-    # Append the NEW user message
     messages.append({"role": "user", "content": req.message})
 
     try:
@@ -353,10 +424,15 @@ def chat_with_opsbot(req: ChatRequest):
         return {"error": f"LLM Error: {str(e)}"}
 
 @app.post("/simulate_attack")
-def simulate_attack(container: str = "rentacar_backend", type: str = "cpu_spike"):
+def simulate_attack(container: str = None, type: str = "cpu_spike"):
+    if not container:
+        container = f"{TARGET_WORKLOAD}_backend"
+        
     system_state["simulated_attack"] = True
     system_state["simulated_target"] = container
     system_state["attack_type"] = type
+    
+    logger.critical(f"⚠️  SIMULATING: {type.upper()} ON {container} ⚠️")
     
     if docker_client:
         try:
@@ -395,7 +471,7 @@ def scale_out_container(base_container_name: str) -> str:
         if not target:
             return f"Container '{base_container_name}' not found for scaling."
             
-        image_name = target.image.tags[0] if target.image.tags else "rentacar-backend"
+        image_name = target.image.tags[0] if target.image.tags else f"{TARGET_WORKLOAD}-backend"
         replica_name = f"{base_container_name}_replica_{int(time.time())}"
         
         # Get network of original container
@@ -415,6 +491,25 @@ def scale_out_container(base_container_name: str) -> str:
         logger.error(f"Scale out failed: {e}")
         return f"Auto-Scale Failed: {str(e)}"
 
+@app.post("/remediate/green")
+def execute_green_ops():
+    if not docker_client: return {"error": "Docker offline"}
+    
+    deleted = 0
+    try:
+        for c in docker_client.containers.list(all=True):
+            if "_replica_" in c.name:
+                c.remove(force=True) # type: ignore
+                deleted += 1
+                
+        msg = f"Green Ops: Terminated {deleted} idle replicas to save energy." if deleted > 0 else "Green Ops: System is already operating at minimum energy profile (0 replicas)."
+        if deleted > 0:
+            system_state["history"].append({"time": datetime.now().strftime("%H:%M:%S"), "event": msg})
+        
+        return {"status": "success", "message": msg, "deleted": deleted}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.post("/remediate/{container_name}")
 def execute_fix(container_name: str):
     
@@ -422,7 +517,7 @@ def execute_fix(container_name: str):
         # AI Auto-detects the target based on the current context that was attacked
         container_name = system_state.get("simulated_target")
         if not container_name:
-            container_name = "rentacar_backend"
+            container_name = f"{TARGET_WORKLOAD}_backend"
         
     atk = system_state.get("attack_type", "")
     is_scaling = False
@@ -442,7 +537,7 @@ def execute_fix(container_name: str):
     if container_name == "manual-override":
         target_name = system_state.get("simulated_target")
         if not target_name:
-            target_name = "rentacar_backend"
+            target_name = f"{TARGET_WORKLOAD}_backend"
         action_msg = "Attack aborted manually. Original container restarted (Replicas left online)."
         if docker_client:
             try:

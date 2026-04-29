@@ -147,7 +147,7 @@
             </button>
             <button onclick="switchTab('opsbot')" id="btn-opsbot"
                 class="tab-btn text-slate-400 border-b-2 border-transparent hover:text-slate-300 pb-3 px-1 font-medium text-sm flex items-center gap-2 transition-colors">
-                OpsBot Deep Dive <span
+                Analysis<span
                     class="bg-blue-600/30 text-blue-400 py-0.5 px-2 rounded-full text-[10px] animate-pulse">Llama-3</span>
             </button>
 
@@ -166,6 +166,10 @@
                 <button onclick="toggleAttack()" id="attack-btn"
                     class="bg-red-900/40 hover:bg-red-800/60 text-red-400 border border-red-800/50 px-4 py-1.5 rounded text-xs font-semibold tracking-wider uppercase transition-all shadow-sm">
                     Simulate Attack
+                </button>
+                <button onclick="executeGreenOps()" id="green-ops-btn"
+                    class="bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-400 border border-emerald-800/50 px-4 py-1.5 rounded text-xs font-semibold tracking-wider uppercase transition-all shadow-sm ml-2">
+                    Green Ops (Scale In)
                 </button>
             </div>
         </nav>
@@ -263,14 +267,12 @@
                                     </svg>
                                     Live Container Tail
                                 </h2>
-                                <p class="text-[10px] text-slate-500 mt-1">Select a container from the top navigation
-                                    bar to view logs</p>
+                                <p class="text-[10px] text-slate-500 mt-1">Streaming real-time container output</p>
                             </div>
-                            <span class="relative flex h-3 w-3">
-                                <span
-                                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                            </span>
+                            <button id="generate-summary-btn" onclick="generateAISummary()"
+                                class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2 rounded-lg transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                                Generate AI Summary
+                            </button>
                         </div>
                         <div id="live-tail"
                             class="flex-grow p-4 overflow-y-auto min-h-0 terminal-scroll text-[11px] font-mono text-slate-400 bg-[#060a12]/70 relative">
@@ -644,7 +646,7 @@
                 await fetch(`${API_BASE}/simulate_attack${containerQuery}`, { method: 'POST' });
             } else {
                 isAttacking = false;
-                btn.innerHTML = '🔥 Simulate Attack';
+                btn.innerHTML = 'Simulate Attack';
                 btn.classList.replace('text-slate-400', 'text-red-400');
                 btn.classList.replace('hover:bg-slate-700', 'hover:bg-red-800/60');
                 btn.classList.replace('bg-slate-800', 'bg-red-900/40');
@@ -696,17 +698,72 @@
             }
         }
 
+        async function executeGreenOps() {
+            logToTerminal("Executing Green Ops Scale-In protocol...", "info");
+            try {
+                const response = await fetch(`${API_BASE}/remediate/green`, { method: 'POST' });
+                const result = await response.json();
+
+                if (result.status === "success") {
+                    logToTerminal(result.message, "success");
+                    setTimeout(fetchProcesses, 1000);
+                } else {
+                    logToTerminal(`Green Ops Error: ${result.error}`, "error");
+                }
+            } catch (e) {
+                logToTerminal("Lost connection to Sentinel Core.", "error");
+            }
+        }
+
         // --- 6. OPSBOT CHAT ENGINE & LIVE TAIL LOGIC ---
         let chatHistory = [];
+
+        async function generateAISummary() {
+            const selectEl = document.getElementById('attack-target');
+            if (!selectEl) return;
+            const containerName = selectEl.value;
+            const btn = document.getElementById('generate-summary-btn');
+
+            if (containerName === "Select Target Workload..." || !containerName) {
+                appendMessage("Please select a workload from the top navigation dropdown first.", false, true);
+                return;
+            }
+
+            // UI Loading state
+            btn.disabled = true;
+            btn.innerHTML = `<span class="animate-pulse">Synthesizing...</span>`;
+            appendTypingIndicator();
+
+            try {
+                const response = await fetch(`${API_BASE}/summarize_logs/${containerName}`);
+                const data = await response.json();
+                removeTypingIndicator();
+
+                if (data.summary) {
+                    let formatted = data.summary
+                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em class="text-slate-300">$1</em>');
+
+                    const msg = `**AI Synthesis Report for ${containerName}**\n\n${formatted}\n\n*Generated via Llama-3-70b*`;
+                    appendMessage(msg);
+                } else {
+                    appendMessage(`Synthesis Error: ${data.error}`, false, true);
+                }
+            } catch (e) {
+                removeTypingIndicator();
+                appendMessage("Network failure during AI synthesis.", false, true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `Generate AI Summary`;
+            }
+        }
 
         async function fetchLogs() {
             const selectEl = document.getElementById('attack-target');
             if (!selectEl) return;
             const containerName = selectEl.value;
-            const tailBox = document.getElementById('live-tail');
 
             if (containerName === "Select Target Workload..." || !containerName) {
-                // The log content inner div needs to be updated so that the UI tailing logic doesn't break
                 const contentDiv = document.getElementById('log-content');
                 if (contentDiv) {
                     contentDiv.innerHTML = "<div class='text-slate-500 text-center mt-10 italic'>Select a workload from the top navigation dropdown to stream logs</div>";
@@ -740,17 +797,16 @@
 
         function parseMarkdown(text) {
             let html = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>');
-            html = html.replace(/\*(.*?)\*/g, '<em class="text-slate-200">$1</em>');
+            html = html.replace(/\*(.*?)\*\*/g, '<em class="text-slate-200">$1</em>');
             html = html.replace(/`(.*?)`/g, '<code class="bg-[#0f172a] text-blue-300 px-1 py-0.5 rounded border border-slate-700 font-mono text-[11px]">$1</code>');
             html = html.replace(/\n\n/g, '<br><br>');
             html = html.replace(/\n- (.*?)(?=\n|$)/g, '<br>• $1');
             return html;
         }
 
-
-
         function appendMessage(text, isUser = false, isError = false) {
             const chatMessages = document.getElementById('chat-messages');
+            if (!chatMessages) return null;
             const wrapper = document.createElement('div');
 
             if (isUser) {
@@ -778,6 +834,7 @@
 
         function appendTypingIndicator() {
             const chatMessages = document.getElementById('chat-messages');
+            if (!chatMessages) return;
             const wrapper = document.createElement('div');
             wrapper.className = "flex items-center mb-4 text-slate-500 pl-8"
             wrapper.id = "typing-indicator";
@@ -800,13 +857,15 @@
         function clearChat() {
             chatHistory = [];
             const chatMessages = document.getElementById('chat-messages');
-            chatMessages.innerHTML = `
-                <div class="flex items-start">
-                    <div class="bot-message p-3 text-slate-300 max-w-[85%] text-[13px] leading-relaxed">
-                        Memory wiped. 🧠 Let's start over.
+            if (chatMessages) {
+                chatMessages.innerHTML = `
+                    <div class="flex items-start">
+                        <div class="bot-message p-3 text-slate-300 max-w-[85%] text-[13px] leading-relaxed">
+                            Memory wiped. 🧠 Let's start over.
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
         }
 
         async function sendChatMessage(e) {
@@ -862,14 +921,13 @@
         setInterval(fetchMetrics, 3000);
         setInterval(fetchProcesses, 5000);
 
-        // Add listener so the live tail updates immediately when user changes the target
         document.getElementById('attack-target').addEventListener('change', fetchLogs);
 
         setInterval(() => {
             if (document.getElementById('tab-opsbot').classList.contains('block')) {
                 fetchLogs();
             }
-        }, 3000);
+        }, 5000);
     </script>
 </body>
 
